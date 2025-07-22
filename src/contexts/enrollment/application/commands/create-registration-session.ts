@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { StudentId, Term, createRegistrationSessionId } from "../../domain/models/shared/value-objects.js";
-import { SessionAlreadyExists, SessionNotFound } from "../../domain/errors/domain-errors.js";
+import { StudentId, Term, RegistrationSessionId } from "../../domain/models/shared/value-objects.js";
+import { SessionAlreadyExists } from "../../domain/errors/domain-errors.js";
 import { RegistrationSessionCreated } from "../../domain/events/registration-session-events.js";
 import { RegistrationSessionRepository } from "../../domain/repositories/registration-session-repository.js";
 import { EventStore } from "../../../shared/kernel/types/event-store.js";
@@ -12,15 +12,13 @@ export interface CreateRegistrationSessionCommand {
 }
 
 // セッションが既に存在しないことを確認するヘルパー関数
-const ensureNotExists = (studentId: StudentId, term: Term) =>
+const ensureNotExists = (sessionId: RegistrationSessionId) =>
   Effect.gen(function* () {
     const repository = yield* RegistrationSessionRepository;
-    return yield* repository.findByStudentAndTerm(studentId, term).pipe(
-      Effect.flatMap((existingSession) =>
+    return yield* repository.findById(sessionId).pipe(
+      Effect.flatMap(() =>
         Effect.fail(new SessionAlreadyExists({
-          studentId,
-          term,
-          existingSessionId: existingSession.id
+          sessionId
         }))
       ),
       Effect.catchTag("SessionNotFound", () => Effect.succeed(undefined))
@@ -36,11 +34,11 @@ export const createRegistrationSession = (
 
     const { studentId, term } = command;
 
-    // 既存セッションが存在しないことを確認
-    yield* ensureNotExists(studentId, term);
+    // 複合キーからセッションIDを生成
+    const sessionId = yield* RegistrationSessionId.create(studentId, term);
 
-    // 新しいセッションIDを作成
-    const sessionId = createRegistrationSessionId(studentId, term);
+    // 既存セッションが存在しないことを確認（複合キーで直接チェック）
+    yield* ensureNotExists(sessionId);
 
     // ドメインイベントを作成
     const event = new RegistrationSessionCreated({
@@ -49,7 +47,6 @@ export const createRegistrationSession = (
       term,
       createdAt: new Date()
     });
-
 
     // イベントを保存（イベントソーシング: セッションは永続化せずイベントのみ保存）
     // 注意: 現在は非同期投影を実装していないため、リポジトリはイベントから再構築

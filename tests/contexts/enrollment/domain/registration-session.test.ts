@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { Effect } from "effect";
 import {
   RegistrationSession,
   Draft,
@@ -14,26 +15,33 @@ import {
   Term,
   EnrollmentId,
   NonEmptyString,
-  createRegistrationSessionId
+  RegistrationSessionId
 } from "../../../../src/contexts/enrollment/domain/models/shared/value-objects.js";
 
 describe("RegistrationSession", () => {
   const studentId = StudentId.make("S12345678");
   const term = Term.make("2024-Spring");
-  const sessionId = createRegistrationSessionId(studentId, term);
+
+  const createSessionId = () => RegistrationSessionId.create(studentId, term);
+  
+  // Effect を使わないテスト用のヘルパー（レガシーサポート）
+  const sessionId = RegistrationSessionId.make("S12345678:2024-Spring");
 
   describe("作成", () => {
-    it("新規セッションをDraft状態で作成できる", () => {
-      const session = RegistrationSession.create(sessionId, studentId, term);
+    it("新規セッションをDraft状態で作成できる", () =>
+      Effect.gen(function* () {
+        const sessionId = yield* createSessionId();
+        const session = RegistrationSession.create(sessionId, studentId, term);
 
-      expect(session.id).toBe(sessionId);
-      expect(session.studentId).toBe(studentId);
-      expect(session.term).toBe(term);
-      expect(session.enrollments).toHaveLength(0);
-      expect(session.totalUnits).toBe(0);
-      expect(session.status._tag).toBe("Draft");
-      expect(session.version).toBe(1);
-    });
+        expect(session.id).toBe(sessionId);
+        expect(session.studentId).toBe(studentId);
+        expect(session.term).toBe(term);
+        expect(session.enrollments).toHaveLength(0);
+        expect(session.totalUnits).toBe(0);
+        expect(session.status._tag).toBe("Draft");
+        expect(session.version).toBe(1);
+      }).pipe(Effect.runPromise)
+    );
 
     it("Draft状態は作成日時を持つ", () => {
       const session = RegistrationSession.create(sessionId, studentId, term);

@@ -1,5 +1,5 @@
 import { Effect, Layer, Ref } from "effect";
-import { EventStore, EventStoreError, AggregateType } from "../../kernel/types/event-store.js";
+import { EventStore, EventStoreError, AggregateType, AggregateId } from "../../kernel/types/event-store.js";
 import { DomainEvent } from "../../../enrollment/domain/events/registration-session-events.js";
 
 interface StoredEvent {
@@ -51,7 +51,7 @@ export const InMemoryEventStore = Layer.effect(
             .filter(e => e.aggregateType === aggregateType)
             .forEach(e => aggregateIds.add(e.aggregateId));
           
-          return Array.from(aggregateIds) as ReadonlyArray<AggregateId>;
+          return Array.from(aggregateIds) as ReadonlyArray<string> as ReadonlyArray<AggregateId>;
         }).pipe(
           Effect.catchAll((error) =>
             Effect.fail(new EventStoreError({ cause: error }))

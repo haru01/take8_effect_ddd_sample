@@ -1,31 +1,23 @@
 import { Data } from "effect";
-import { RegistrationSessionId, StudentId, Term } from "../models/shared/value-objects.js";
+import { RegistrationSessionId } from "../models/shared/value-objects.js";
 
 // --- ドメインエラー ---
 
 export class SessionAlreadyExists extends Data.TaggedError("SessionAlreadyExists")<{
-  readonly studentId: StudentId;
-  readonly term: Term;
-  readonly existingSessionId: RegistrationSessionId;
+  readonly sessionId: RegistrationSessionId;
 }> {
   get message() {
-    return `履修登録セッションが既に存在します: 学生ID=${this.studentId}, 学期=${this.term}, セッションID=${this.existingSessionId}`;
+    const { studentId, term } = RegistrationSessionId.parse(this.sessionId);
+    return `履修登録セッションが既に存在します: 学生ID=${studentId}, 学期=${term}`;
   }
 }
 
 export class SessionNotFound extends Data.TaggedError("SessionNotFound")<{
-  readonly sessionId?: RegistrationSessionId;
-  readonly studentId?: StudentId;
-  readonly term?: Term;
+  readonly sessionId: RegistrationSessionId;
 }> {
   get message() {
-    if (this.sessionId) {
-      return `履修登録セッションが見つかりません: セッションID=${this.sessionId}`;
-    } else if (this.studentId && this.term) {
-      return `履修登録セッションが見つかりません: 学生ID=${this.studentId}, 学期=${this.term}`;
-    } else {
-      return `履修登録セッションが見つかりません`;
-    }
+    const { studentId, term } = RegistrationSessionId.parse(this.sessionId);
+    return `履修登録セッションが見つかりません: 学生ID=${studentId}, 学期=${term}`;
   }
 }
 

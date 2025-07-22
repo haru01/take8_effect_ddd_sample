@@ -7,8 +7,10 @@ import { InMemoryEventBus } from "./contexts/shared/infrastructure/event-bus/in-
 
 const ApplicationLayer = Layer.mergeAll(
   InMemoryEventStore,
-  InMemoryRegistrationSessionRepository,
-  InMemoryEventBus
+  InMemoryEventBus,
+  InMemoryRegistrationSessionRepository.pipe(
+    Layer.provide(InMemoryEventStore)
+  )
 );
 
 const program = Effect.gen(function* () {

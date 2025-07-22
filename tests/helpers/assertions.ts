@@ -66,8 +66,8 @@ export const assertSessionCreatedSuccessfully = (
   Effect.gen(function* () {
     const { sessionId, expectedStudentId, expectedTerm, capturedEvents } = assertion;
     
-    // セッションIDの形式確認
-    expect(sessionId).toMatch(/^RS\d{8}$/);
+    // セッションIDの形式確認（複合キー: S12345678:YYYY-Season）
+    expect(sessionId).toMatch(/^S\d{8}:\d{4}-(Spring|Fall|Summer)$/);
     
     // リポジトリでの存在確認
     const session = yield* assertSessionExistsInRepository(
@@ -121,14 +121,10 @@ export const assertMultipleSessionsCreated = (
 // 重複作成エラーのアサーション
 export const assertDuplicateSessionError = (
   error: any,
-  expectedStudentId: StudentId,
-  expectedTerm: Term,
-  expectedExistingSessionId: RegistrationSessionId
+  expectedSessionId: RegistrationSessionId
 ) => {
   expect(error._tag).toBe("SessionAlreadyExists");
-  expect(error.studentId).toBe(expectedStudentId);
-  expect(error.term).toBe(expectedTerm);
-  expect(error.existingSessionId).toBe(expectedExistingSessionId);
+  expect(error.sessionId).toBe(expectedSessionId);
 };
 
 // イベント数のアサーション（重複作成時などで使用）

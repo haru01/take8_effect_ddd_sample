@@ -1,4 +1,4 @@
-import { Schema, Brand } from "effect";
+import { Schema, Brand, Effect, ParseResult } from "effect";
 
 // --- NonEmptyString ---
 export type NonEmptyString = string & Brand.Brand<"NonEmptyString">;
@@ -63,11 +63,12 @@ export const Term = {
 };
 
 // --- RegistrationSessionId ---
+// 複合IDとしてのRegistrationSessionId（StudentId:Term）
 export type RegistrationSessionId = string & Brand.Brand<"RegistrationSessionId">;
 
 const RegistrationSessionIdSchema = Schema.String.pipe(
-  Schema.pattern(/^RS\d{8}$/, {
-    message: () => "セッションIDは'RS'で始まる10文字である必要があります"
+  Schema.pattern(/^S\d{8}:\d{4}-(Spring|Fall|Summer)$/, {
+    message: () => "セッションIDは'S12345678:YYYY-Season'形式である必要があります"
   }),
   Schema.brand("RegistrationSessionId")
 );
@@ -76,20 +77,19 @@ export const RegistrationSessionId = {
   decode: Schema.decode(RegistrationSessionIdSchema),
   encode: Schema.encode(RegistrationSessionIdSchema),
   make: (value: string): RegistrationSessionId => value as RegistrationSessionId,
+  create: (studentId: StudentId, term: Term): Effect.Effect<RegistrationSessionId, ParseResult.ParseError> => {
+    const composite = `${studentId}:${term}`;
+    return Schema.decode(RegistrationSessionIdSchema)(composite);
+  },
+  parse: (sessionId: RegistrationSessionId): { studentId: StudentId; term: Term } => {
+    const [studentId, term] = sessionId.split(':');
+    return {
+      studentId: StudentId.make(studentId),
+      term: Term.make(term)
+    };
+  }
 };
 
-// セッションIDの生成
-let idCounter = 0;
-export const createRegistrationSessionId = (
-  _studentId: StudentId,
-  _term: Term
-): RegistrationSessionId => {
-  // 実際は連番やUUIDを使用
-  // テスト用に連番とタイムスタンプを組み合わせて一意性を保証
-  const timestamp = Date.now().toString().slice(-6);
-  const counter = (++idCounter).toString().padStart(2, '0');
-  return RegistrationSessionId.make(`RS${timestamp}${counter}`);
-};
 
 // --- EnrollmentId ---
 // 複合IDとしてのEnrollmentId（StudentId:CourseId:Term）

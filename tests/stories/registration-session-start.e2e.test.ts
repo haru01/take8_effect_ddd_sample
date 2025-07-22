@@ -85,7 +85,7 @@ describe("Story 1: 履修登録セッション開始", () => {
         );
 
         // Assert - 重複エラーの確認
-        assertDuplicateSessionError(error, studentId, term, firstSessionId);
+        assertDuplicateSessionError(error, firstSessionId);
         
         // Assert - イベントは最初の作成分のみ発行されていることを確認
         yield* assertEventCount(capturedEvents, 1);
@@ -153,26 +153,40 @@ describe("Story 1: 履修登録セッション開始", () => {
     );
   });
 
-  describe("エラーケース", () => {
-    it("無効な学生IDでセッション作成は失敗する", () =>
+  describe("エラーケース (E2E)", () => {
+    it("不正な学生IDでコマンド実行は失敗する", () =>
       Effect.gen(function* () {
-        // Act & Assert - 無効な学生ID（短すぎる）
-        const validationError = yield* StudentId.decode("S123").pipe(Effect.flip);
+        // Arrange - 不正な学生IDと有効な学期（E2Eテスト: コマンド層からの完全な処理）
+        const invalidStudentId = StudentId.make("INVALID");
+        const validTerm = Term.make("2024-Spring");
 
-        // Assert - バリデーションエラーの確認
-        assertValidationError(validationError, "学生IDは'S'で始まる9文字である必要があります");
+        // Act & Assert - createRegistrationSession コマンドがアーキテクチャ全体を通じて失敗することを確認
+        const commandError = yield* createRegistrationSession({ 
+          studentId: invalidStudentId, 
+          term: validTerm 
+        }).pipe(Effect.flip);
+
+        // Assert - 複合キー生成時のバリデーションエラーがコマンド層まで伝播することを確認
+        assertValidationError(commandError, "セッションIDは'S12345678:YYYY-Season'形式である必要があります");
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
     );
 
-    it("無効な学期でセッション作成は失敗する", () =>
+    it("不正な学期でコマンド実行は失敗する", () =>
       Effect.gen(function* () {
-        // Act & Assert - 無効な学期フォーマット
-        const validationError = yield* Term.decode("2024-Invalid").pipe(Effect.flip);
+        // Arrange - 有効な学生IDと不正な学期（E2Eテスト）
+        const validStudentId = StudentId.make("S12345678");
+        const invalidTerm = Term.make("BAD-TERM");
 
-        // Assert - バリデーションエラーの確認
-        assertValidationError(validationError, "学期は'YYYY-Spring/Fall/Summer'形式である必要があります");
+        // Act & Assert - createRegistrationSession コマンドがアーキテクチャ全体を通じて失敗することを確認
+        const commandError = yield* createRegistrationSession({ 
+          studentId: validStudentId, 
+          term: invalidTerm 
+        }).pipe(Effect.flip);
+
+        // Assert - 複合キー生成時のバリデーションエラーがコマンド層まで伝播することを確認
+        assertValidationError(commandError, "セッションIDは'S12345678:YYYY-Season'形式である必要があります");
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
