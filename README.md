@@ -60,21 +60,45 @@ E2Eテストから始めるストーリー単位の実装により、ユーザ�
 **I WANT TO** 選択した複数の科目を履修登録セッションに一括で追加する
 **SO THAT** 効率的に履修科目を登録できる
 
-**実装タスク**:
-- [ ] E2Eテスト: 科目一括追加の成功シナリオ
-- [ ] E2Eテスト: 単位数上限超過の失敗シナリオ
-- [ ] E2Eテスト: 重複科目追加の失敗シナリオ
-- [ ] ドメインイベント: `CoursesAddedToSession`, `EnrollmentsRequestedBatch`
-- [ ] ドメインエラー: `MaxUnitsExceeded`, `DuplicateCourseInSession`
-- [ ] ドメインロジック: 科目追加、重複チェック、単位数チェック
-- [ ] アプリケーションコマンド: `AddCoursesToSessionCommand`
-- [ ] テスト通過確認
+**既存実装済み要素**:
+- [x] ドメインモデル基盤 (`RegistrationSession` クラス)
+- [x] 重複チェックロジック (`hasCourse`, `findDuplicateCourses`)
+- [x] ビジネスルール定数 (`MAX_UNITS_PER_TERM = 20`)
+- [x] 状態チェック (`canModifyCourses`)
+- [x] 基盤インフラ (EventStore, EventBus, Repository)
+
+**実装タスク** (TDDアプローチで効率的実装):
+- [ ] E2Eテストファイル作成 (`tests/stories/course-addition.e2e.test.ts`)
+  - [ ] 科目一括追加の成功シナリオ
+  - [ ] 単位数上限超過の失敗シナリオ  
+  - [ ] 重複科目追加の失敗シナリオ
+  - [ ] セッション未存在での追加失敗シナリオ
+  - [ ] 不正状態(Draft以外)での追加失敗シナリオ
+- [ ] ドメインエラー実装 (`MaxUnitsExceeded`, `DuplicateCourseInSession`, `InvalidSessionState`)
+- [ ] ドメインイベント実装 (`CoursesAddedToSession`, `EnrollmentsRequestedBatch`)
+- [ ] ドメインロジック統合 (`addCourses` メソッド追加)
+- [ ] アプリケーションコマンド実装 (`AddCoursesToSessionCommand`)
+- [ ] カスタムアサーション拡張（科目追加用テストヘルパー）
+- [ ] 統合テストと動作確認
+
+**実装方針**:
+- **既存インフラ活用**: EventStore, EventBus, Repository流用で効率化
+- **CLAUDE.md準拠**: 一括操作アーキテクチャに基づく実装
+- **Effect-TS活用**: 型安全な副作用管理と実行時バリデーション
 
 **受け入れ条件**:
 - 複数科目を一度に追加できる
-- 重複科目の追加は失敗する
+- 重複科目の追加は失敗する（既存ロジック活用）
 - 単位数上限（20単位）を超える追加は失敗する
 - 追加後のセッションに科目と単位数が反映される
+- Draft状態でのみ科目追加が可能
+- 適切なドメインイベントが発行される
+
+**期待成果**:
+- E2Eテスト: 6 → 11 (+5テスト)
+- カバレッジ維持: 90%以上  
+- 型安全性: TypeScriptエラー0
+- 次ストーリー（履修登録提出）への基盤構築完了
 
 ### 📝 ストーリー3: 履修登録提出
 **AS A** 学生
