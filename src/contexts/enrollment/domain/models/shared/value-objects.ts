@@ -79,13 +79,16 @@ export const RegistrationSessionId = {
 };
 
 // セッションIDの生成
+let idCounter = 0;
 export const createRegistrationSessionId = (
   _studentId: StudentId,
   _term: Term
 ): RegistrationSessionId => {
   // 実際は連番やUUIDを使用
-  const timestamp = Date.now().toString().slice(-8);
-  return RegistrationSessionId.make(`RS${timestamp}`);
+  // テスト用に連番とタイムスタンプを組み合わせて一意性を保証
+  const timestamp = Date.now().toString().slice(-6);
+  const counter = (++idCounter).toString().padStart(2, '0');
+  return RegistrationSessionId.make(`RS${timestamp}${counter}`);
 };
 
 // --- EnrollmentId ---

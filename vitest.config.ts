@@ -5,6 +5,29 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    coverage: {
+      enabled: true,
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      reportsDirectory: './coverage',
+      exclude: [
+        'coverage/**',
+        'dist/**',
+        '**/node_modules/**',
+        '**/*.d.ts',
+        '**/*.config.*',
+        '**/main.ts', // エントリーポイントは除外
+      ],
+      include: ['src/**/*.ts'],
+      thresholds: {
+        global: {
+          branches: 80,
+          functions: 80,
+          lines: 80,
+          statements: 80
+        }
+      }
+    },
   },
   resolve: {
     alias: {
