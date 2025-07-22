@@ -34,6 +34,9 @@ export const createRegistrationSession = (
 
     const { studentId, term } = command;
 
+    // TODO: studentIdで学生の存在を確認するロジックを追加する
+    // TODO: termの妥当性を確認するロジックを追加する
+
     // 複合キーからセッションIDを生成
     const sessionId = yield* RegistrationSessionId.create(studentId, term);
 
