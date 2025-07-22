@@ -11,35 +11,33 @@ export interface CreateRegistrationSessionCommand {
   readonly term: Term;
 }
 
+// セッションが既に存在しないことを確認するヘルパー関数
+const ensureNotExists = (studentId: StudentId, term: Term) =>
+  Effect.gen(function* () {
+    const repository = yield* RegistrationSessionRepository;
+    return yield* repository.findByStudentAndTerm(studentId, term).pipe(
+      Effect.flatMap((existingSession) =>
+        Effect.fail(new SessionAlreadyExists({
+          studentId,
+          term,
+          existingSessionId: existingSession.id
+        }))
+      ),
+      Effect.catchTag("SessionNotFound", () => Effect.succeed(undefined))
+    );
+  });
+
 export const createRegistrationSession = (
   command: CreateRegistrationSessionCommand
 ) =>
   Effect.gen(function* () {
-    const repository = yield* RegistrationSessionRepository;
     const eventStore = yield* EventStore;
     const eventBus = yield* EventBus;
 
     const { studentId, term } = command;
 
-    // 既存セッションの確認 - SessionNotFoundエラーをキャッチして継続、それ以外のエラーは再throw
-    const sessionExists = yield* Effect.gen(function* () {
-      const existingSession = yield* repository.findByStudentAndTerm(studentId, term);
-      return existingSession;
-    }).pipe(
-      Effect.catchTag("SessionNotFound", () => Effect.succeed(null)),
-      // EventStoreErrorなど他のエラーは再throw
-      Effect.catchAll((error) => Effect.fail(error))
-    );
-
-    if (sessionExists) {
-      return yield* Effect.fail(
-        new SessionAlreadyExists({
-          studentId,
-          term,
-          existingSessionId: sessionExists.id
-        })
-      );
-    }
+    // 既存セッションが存在しないことを確認
+    yield* ensureNotExists(studentId, term);
 
     // 新しいセッションIDを作成
     const sessionId = createRegistrationSessionId(studentId, term);
