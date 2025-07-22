@@ -1,143 +1,183 @@
-# 履修管理システム実装計画
+# 履修管理システム実装計画 - E2Eファーストアプローチ
 
 ## 概要
-Effect-TSを使用したCQRS/イベントソーシングによる履修管理システムの実装計画です。
-ハッピーパスシナリオから段階的に機能を実装していきます。
+E2Eテストから始めるストーリー単位の実装により、ユーザー価値を段階的に提供します。
+各ストーリー完了時点で動作するソフトウェアが存在し、早期フィードバックが可能です。
 
-## ハッピーパスシナリオ
-1. 学生が履修登録セッションを開始
-2. 科目を一括追加（または置換）
-3. 履修登録を一括提出
-4. アドバイザーが確認・承認
-5. 個別履修が開始
+## 実装方針
+1. **E2Eテストファースト**: 失敗するテストから開始
+2. **ストーリー単位**: バーティカルスライスで価値を提供  
+3. **最小限実装**: テストが通る最小限のコード
+4. **段階的拡張**: 前ストーリー完了後に次へ進む
 
-## フェーズ1: 基盤構築（優先度: 高）
+## ユーザーストーリー実装順序
 
-### 1.1 プロジェクトの初期セットアップ
-- TypeScriptプロジェクトの作成
-- Effect-TSの依存関係追加
-- 境界づけられたコンテキストに基づくディレクトリ構造の作成
+### ✅ 完了済み
+- [x] プロジェクト基盤構築（境界づけられたコンテキスト構成）
+- [x] ドメイン層基本実装（集約、エンティティ、値オブジェクト）
+- [x] ドメインモデルテスト（25テスト）
 
-#### ディレクトリ構造（境界づけられたコンテキスト）
+### 🎯 ストーリー1: 履修登録セッション開始
+**AS A** 学生  
+**I WANT TO** 履修科目を選択するために履修登録セッションを開始する  
+**SO THAT** 履修登録プロセスを始められる  
 
+**実装タスク**:
+- [ ] E2Eテスト: セッション作成の成功シナリオ
+- [ ] E2Eテスト: 重複セッション作成の失敗シナリオ  
+- [ ] ドメインイベント: `RegistrationSessionCreated`
+- [ ] ドメインエラー: `SessionAlreadyExists`
+- [ ] アプリケーションコマンド: `CreateRegistrationSessionCommand`
+- [ ] インメモリEventStore実装
+- [ ] インメモリRepository実装
+- [ ] テスト通過確認
+
+**受け入れ条件**:
+- 学生IDと学期を指定してセッションを作成できる
+- 同じ学生・学期の重複セッション作成は失敗する
+- 作成されたセッションはDraft状態である
+- セッションIDが生成され、後の操作で使用できる
+
+### 📚 ストーリー2: 科目一括追加
+**AS A** 学生  
+**I WANT TO** 選択した複数の科目を履修登録セッションに一括で追加する  
+**SO THAT** 効率的に履修科目を登録できる  
+
+**実装タスク**:
+- [ ] E2Eテスト: 科目一括追加の成功シナリオ
+- [ ] E2Eテスト: 単位数上限超過の失敗シナリオ
+- [ ] E2Eテスト: 重複科目追加の失敗シナリオ
+- [ ] ドメインイベント: `CoursesAddedToSession`, `EnrollmentsRequestedBatch`
+- [ ] ドメインエラー: `MaxUnitsExceeded`, `DuplicateCourseInSession`
+- [ ] ドメインロジック: 科目追加、重複チェック、単位数チェック
+- [ ] アプリケーションコマンド: `AddCoursesToSessionCommand`
+- [ ] テスト通過確認
+
+**受け入れ条件**:
+- 複数科目を一度に追加できる
+- 重複科目の追加は失敗する
+- 単位数上限（20単位）を超える追加は失敗する
+- 追加後のセッションに科目と単位数が反映される
+
+### 📝 ストーリー3: 履修登録提出
+**AS A** 学生  
+**I WANT TO** 選択した科目を確定するために履修登録を提出する  
+**SO THAT** アドバイザーによる承認を受けられる  
+
+**実装タスク**:
+- [ ] E2Eテスト: 履修登録提出の成功シナリオ
+- [ ] E2Eテスト: 最小単位数不足の失敗シナリオ
+- [ ] E2Eテスト: 不正状態での提出失敗シナリオ
+- [ ] ドメインイベント: `RegistrationSessionSubmitted`
+- [ ] ドメインエラー: `MinUnitsNotMet`, `InvalidSessionState`
+- [ ] ドメインロジック: セッション提出、最小単位数チェック
+- [ ] アプリケーションコマンド: `SubmitRegistrationSessionCommand`
+- [ ] テスト通過確認
+
+**受け入れ条件**:
+- Draft状態のセッションを提出できる
+- 最小単位数（12単位）未満の場合は失敗する
+- 提出後はSubmitted状態になる
+- Draft以外の状態では提出できない
+
+### ✅ ストーリー4: アドバイザー承認
+**AS AN** アドバイザー  
+**I WANT TO** 提出された履修登録を確認して承認・却下する  
+**SO THAT** 学生の履修計画が適切であることを保証できる  
+
+**実装タスク**:
+- [ ] E2Eテスト: 履修登録承認の成功シナリオ
+- [ ] E2Eテスト: 履修登録却下の成功シナリオ
+- [ ] E2Eテスト: 承認待ち一覧取得
+- [ ] ドメインイベント: `RegistrationSessionApproved/Rejected`, `EnrollmentsApprovedBatch`
+- [ ] ドメインロジック: セッション承認/却下
+- [ ] アプリケーションコマンド: `ApproveRegistrationSessionCommand`, `RejectRegistrationSessionCommand`
+- [ ] アプリケーションクエリ: `GetPendingSessionsQuery`
+- [ ] テスト通過確認
+
+**受け入れ条件**:
+- Submitted状態のセッションを承認できる
+- 承認理由と承認者を記録する
+- 承認後はApproved状態になり、関連履修もApproved状態になる
+- 却下時は理由と却下者を記録する
+- 承認待ちセッション一覧を取得できる
+
+### 🚀 ストーリー5: 履修開始
+**AS A** 学生  
+**I WANT TO** 承認された履修について学期開始時に履修を開始する  
+**SO THAT** 授業に参加して単位取得に向けて学習できる  
+
+**実装タスク**:
+- [ ] E2Eテスト: 履修開始の成功シナリオ
+- [ ] E2Eテスト: 一括履修開始（学期開始処理）
+- [ ] ドメインイベント: `EnrollmentStarted`
+- [ ] ドメインロジック: 履修開始
+- [ ] アプリケーションコマンド: `StartEnrollmentCommand`, `StartTermEnrollmentsCommand`
+- [ ] テスト通過確認
+
+**受け入れ条件**:
+- Approved状態の履修を開始できる
+- 履修開始後はInProgress状態になる
+- 学期開始時に該当する全履修を一括開始できる
+- 開始日時が記録される
+
+## E2Eテスト戦略
+
+### テストカテゴリ
+- **😊 ハッピーパス**: 正常な業務フロー
+- **😱 エラーケース**: 異常系・境界値
+- **🔄 状態遷移**: 不正な状態変更の防止
+- **🏢 ビジネスルール**: ドメイン制約の検証
+
+### テスト環境
+- インメモリ実装によるfast feedback
+- 実際のAPIインターフェースでの統合テスト
+- Given-When-Then形式による明確な仕様記述
+
+### テストファイル構成
 ```
-src/
-├── contexts/                      # 境界づけられたコンテキスト
-│   ├── enrollment/               # 履修管理コンテキスト
-│   │   ├── domain/              # ドメイン層
-│   │   │   ├── models/          # エンティティ・値オブジェクト
-│   │   │   │   ├── registration-session/
-│   │   │   │   │   ├── registration-session.ts
-│   │   │   │   │   ├── events.ts
-│   │   │   │   │   └── errors.ts
-│   │   │   │   ├── enrollment/
-│   │   │   │   │   ├── enrollment.ts
-│   │   │   │   │   ├── events.ts
-│   │   │   │   │   └── errors.ts
-│   │   │   │   └── shared/
-│   │   │   │       └── value-objects.ts
-│   │   │   ├── repositories/   # リポジトリインターフェース
-│   │   │   └── services/       # ドメインサービス
-│   │   ├── application/         # アプリケーション層
-│   │   │   ├── commands/       # コマンドハンドラー
-│   │   │   ├── queries/        # クエリハンドラー
-│   │   │   └── ports/          # ポート（外部インターフェース）
-│   │   └── infrastructure/     # インフラ層
-│   │       ├── persistence/    # 永続化実装
-│   │       └── messaging/      # メッセージング実装
-│   └── shared/                  # 共有コンテキスト
-│       ├── kernel/             # 共有カーネル
-│       │   ├── types/          # 共通型定義
-│       │   └── errors/         # 共通エラー
-│       └── infrastructure/     # 共通インフラ
-│           ├── event-store/    # イベントストア
-│           └── event-bus/      # イベントバス
-├── api/                         # APIエントリーポイント
-└── main.ts                      # アプリケーションエントリーポイント
+tests/
+└── stories/
+    ├── story1-session-creation.e2e.test.ts
+    ├── story2-course-addition.e2e.test.ts
+    ├── story3-session-submission.e2e.test.ts
+    ├── story4-advisor-approval.e2e.test.ts
+    └── story5-enrollment-start.e2e.test.ts
 ```
 
-### 1.2 ドメイン層の基本実装
-- [ ] 値オブジェクトの定義
-  - StudentId, CourseId, Term, EnrollmentId
-  - ブランド型による型安全性の確保
-- [ ] 履修登録セッション（RegistrationSession）集約
-  - セッション状態管理（Draft/Submitted/Approved/Rejected）
-  - 科目リストと合計単位数の管理
-- [ ] 個別履修（Enrollment）エンティティ
-  - 履修状態管理（Requested/Approved/InProgress/Completed等）
-  - 成績情報の管理
+## 実装完了の定義
+各ストーリーで以下が完了すること：
+1. ✅ すべてのE2Eテストがパス
+2. 🏗️ 必要な実装が完了（Domain→Application→Infrastructure）
+3. 📊 型チェックとLintエラーなし
+4. 📖 テストが仕様書として機能
+5. 🔄 前ストーリーとの統合動作確認
 
-### 1.3 ドメインイベントとエラー
-- [ ] セッション関連イベント
-  - RegistrationSessionCreated
-  - CoursesAddedToSession（一括追加）
-  - SessionCoursesReplaced（一括置換）
-  - RegistrationSessionSubmitted
-  - RegistrationSessionApproved/Rejected
-- [ ] 履修関連イベント
-  - EnrollmentsRequestedBatch（一括作成）
-  - EnrollmentsApprovedBatch（一括承認）
-  - EnrollmentStarted（個別）
-- [ ] ドメインエラー
-  - MaxUnitsExceeded, MinUnitsNotMet
-  - InvalidSessionState, DuplicateCourseInSession
+## 開発フロー
+```
+1. E2Eテスト作成（失敗する）
+2. 必要なインターフェースを特定
+3. ドメイン層実装
+4. アプリケーション層実装  
+5. インフラ層実装（インメモリ）
+6. テスト通過確認
+7. リファクタリング
+8. 次ストーリーへ
+```
 
-### 1.4 ドメインロジック
-- [ ] 科目の一括追加ロジック（重複チェック、単位数チェック）
-- [ ] 科目の一括削除ロジック
-- [ ] 科目の全置換ロジック
-- [ ] セッション提出ロジック（最小単位数チェック）
-- [ ] セッション承認/却下ロジック
+## 次期実装候補（バックログ）
+- 科目置換機能（ストーリー2の拡張）
+- 履修完了・成績付与
+- 履修離脱処理
+- PostgreSQL永続化
+- Read Model投影
+- REST API実装
+- ユーザーインターフェース
 
-## フェーズ2: アプリケーション層（優先度: 中）
-
-### 2.1 インターフェース定義
-- [ ] RegistrationSessionRepository
-- [ ] EnrollmentRepository
-- [ ] EventStore（イベントの永続化）
-- [ ] EventBus（イベントの配信）
-
-### 2.2 コマンドハンドラー
-- [ ] createRegistrationSessionCommand - セッション作成
-- [ ] addCoursesToSessionCommand - 科目一括追加
-- [ ] replaceAllCoursesInSessionCommand - 科目全置換
-- [ ] submitRegistrationSessionCommand - 提出
-- [ ] approveRegistrationSessionCommand - 承認
-- [ ] startEnrollmentCommand - 履修開始
-
-## フェーズ3: テスト基盤（優先度: 低）
-
-### 3.1 テスト用実装
-- [ ] インメモリイベントストア
-- [ ] インメモリリポジトリ
-- [ ] テスト用のLayerとDI設定
-
-### 3.2 E2Eテスト
-- [ ] ハッピーパスシナリオの完全なテスト
-  1. セッション作成
-  2. 科目追加（3科目）
-  3. 一括提出
-  4. アドバイザー承認
-  5. 履修開始
-- [ ] 科目置換シナリオのテスト
-
-## フェーズ4: 本番向け実装（優先度: 低）
-
-### 4.1 PostgreSQL実装
-- [ ] イベントストアのPostgreSQL実装
-- [ ] イベント投影（Projector）の実装
-- [ ] Read Model用のテーブル設計
-
-### 4.2 クエリ層
-- [ ] getSessionDetailsQuery
-- [ ] getStudentEnrollmentsQuery
-- [ ] その他の読み取り専用クエリ
-
-## 実装の進め方
-
-1. **最初に作るもの**: プロジェクトセットアップとドメイン層の基本型
-2. **次に作るもの**: 履修登録セッションの基本的な操作（作成、科目追加、提出）
-3. **その次**: アプリケーション層のコマンドでハッピーパスを実現
-4. **最後に**: インフラ層の実装とE2Eテスト
-
-各フェーズは独立してテスト可能なように設計し、段階的に機能を追加していきます。
+## 技術スタック
+- **言語**: TypeScript
+- **フレームワーク**: Effect-TS
+- **アーキテクチャ**: DDD + CQRS + Event Sourcing
+- **テスト**: Vitest (E2E, Unit)
+- **データベース**: インメモリ → PostgreSQL
+- **CI/CD**: GitHub Actions (予定)

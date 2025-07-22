@@ -11,3 +11,4 @@ dist/
 *.swo
 coverage/
 .nyc_output/
+MEMO.md
