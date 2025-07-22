@@ -14,10 +14,27 @@ export class SessionAlreadyExists extends Data.TaggedError("SessionAlreadyExists
 }
 
 export class SessionNotFound extends Data.TaggedError("SessionNotFound")<{
-  readonly sessionId: RegistrationSessionId;
+  readonly sessionId?: RegistrationSessionId;
+  readonly studentId?: StudentId;
+  readonly term?: Term;
 }> {
   get message() {
-    return `履修登録セッションが見つかりません: セッションID=${this.sessionId}`;
+    if (this.sessionId) {
+      return `履修登録セッションが見つかりません: セッションID=${this.sessionId}`;
+    } else if (this.studentId && this.term) {
+      return `履修登録セッションが見つかりません: 学生ID=${this.studentId}, 学期=${this.term}`;
+    } else {
+      return `履修登録セッションが見つかりません`;
+    }
+  }
+}
+
+export class ReconstructionFailed extends Data.TaggedError("ReconstructionFailed")<{
+  readonly reason: string;
+  readonly eventCount: number;
+}> {
+  get message() {
+    return `イベントからの再構築に失敗しました: ${this.reason} (イベント数: ${this.eventCount})`;
   }
 }
 
@@ -46,4 +63,5 @@ export class MaxUnitsExceeded extends Data.TaggedError("MaxUnitsExceeded")<{
 
 export type DomainError =
   | SessionAlreadyExists
-  | SessionNotFound;
+  | SessionNotFound
+  | ReconstructionFailed;

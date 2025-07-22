@@ -1,6 +1,6 @@
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 import { StudentId, Term, createRegistrationSessionId } from "../../domain/models/shared/value-objects.js";
-import { SessionAlreadyExists } from "../../domain/errors/domain-errors.js";
+import { SessionAlreadyExists, SessionNotFound } from "../../domain/errors/domain-errors.js";
 import { RegistrationSessionCreated } from "../../domain/events/registration-session-events.js";
 import { RegistrationSessionRepository } from "../../domain/repositories/registration-session-repository.js";
 import { EventStore } from "../../../shared/kernel/types/event-store.js";
@@ -21,15 +21,22 @@ export const createRegistrationSession = (
 
     const { studentId, term } = command;
 
-    // 既存セッションの確認
-    const existingSession = yield* repository.findByStudentAndTerm(studentId, term);
+    // 既存セッションの確認 - SessionNotFoundエラーをキャッチして継続、それ以外のエラーは再throw
+    const sessionExists = yield* Effect.gen(function* () {
+      const existingSession = yield* repository.findByStudentAndTerm(studentId, term);
+      return existingSession;
+    }).pipe(
+      Effect.catchTag("SessionNotFound", () => Effect.succeed(null)),
+      // EventStoreErrorなど他のエラーは再throw
+      Effect.catchAll((error) => Effect.fail(error))
+    );
 
-    if (Option.isSome(existingSession)) {
+    if (sessionExists) {
       return yield* Effect.fail(
         new SessionAlreadyExists({
           studentId,
           term,
-          existingSessionId: existingSession.value.id
+          existingSessionId: sessionExists.id
         })
       );
     }
