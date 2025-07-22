@@ -40,6 +40,22 @@ export const InMemoryEventStore = Layer.effect(
           Effect.catchAll((error) =>
             Effect.fail(new EventStoreError({ cause: error }))
           )
+        ),
+
+      getAllAggregateIds: (aggregateType) =>
+        Effect.gen(function* () {
+          const allEvents = yield* Ref.get(events);
+          const aggregateIds = new Set<string>();
+          
+          allEvents
+            .filter(e => e.aggregateType === aggregateType)
+            .forEach(e => aggregateIds.add(e.aggregateId));
+          
+          return Array.from(aggregateIds) as ReadonlyArray<AggregateId>;
+        }).pipe(
+          Effect.catchAll((error) =>
+            Effect.fail(new EventStoreError({ cause: error }))
+          )
         )
     };
   })

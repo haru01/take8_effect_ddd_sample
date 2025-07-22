@@ -1,5 +1,4 @@
 import { Effect, Option } from "effect";
-import { RegistrationSession } from "../../domain/models/registration-session/registration-session.js";
 import { StudentId, Term, createRegistrationSessionId } from "../../domain/models/shared/value-objects.js";
 import { SessionAlreadyExists } from "../../domain/errors/domain-errors.js";
 import { RegistrationSessionCreated } from "../../domain/events/registration-session-events.js";
@@ -35,9 +34,8 @@ export const createRegistrationSession = (
       );
     }
 
-    // 新しいセッションを作成
+    // 新しいセッションIDを作成
     const sessionId = createRegistrationSessionId(studentId, term);
-    const session = RegistrationSession.create(sessionId, studentId, term);
 
     // ドメインイベントを作成
     const event = new RegistrationSessionCreated({
@@ -48,9 +46,8 @@ export const createRegistrationSession = (
     });
 
 
-    // セッションを保存（Read Model用） Write/Read分離は不完全
-    yield* repository.save(session);
-    // イベントを保存
+    // イベントを保存（イベントソーシング: セッションは永続化せずイベントのみ保存）
+    // 注意: 現在は非同期投影を実装していないため、リポジトリはイベントから再構築
     yield* eventStore.appendEvent(sessionId, "RegistrationSession", event);
     // イベントをパブリッシュ
     yield* eventBus.publish(event);

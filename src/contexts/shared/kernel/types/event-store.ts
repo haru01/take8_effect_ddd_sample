@@ -11,6 +11,7 @@ export type AggregateId =  RegistrationSessionId | EnrollmentId;
 export interface EventStore {
   readonly appendEvent: (aggregateId: AggregateId, aggregateType: AggregateType, event: DomainEvent) => Effect.Effect<void, EventStoreError>;
   readonly getEvents: (aggregateId: AggregateId, aggregateType: AggregateType) => Effect.Effect<ReadonlyArray<DomainEvent>, EventStoreError>;
+  readonly getAllAggregateIds: (aggregateType: AggregateType) => Effect.Effect<ReadonlyArray<AggregateId>, EventStoreError>;
 }
 
 export const EventStore = Context.GenericTag<EventStore>("@app/EventStore");

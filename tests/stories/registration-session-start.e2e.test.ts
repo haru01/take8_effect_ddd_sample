@@ -8,10 +8,13 @@ import { InMemoryRegistrationSessionRepository } from "../../src/contexts/enroll
 import { InMemoryEventBus } from "../../src/contexts/shared/infrastructure/event-bus/in-memory-event-bus.js";
 
 describe("Story 1: 履修登録セッション開始", () => {
+  // EventStoreとEventBusを先に提供し、それを使ってRepositoryを構築し、全てをマージ
   const TestLayer = Layer.mergeAll(
     InMemoryEventStore,
-    InMemoryRegistrationSessionRepository,
-    InMemoryEventBus
+    InMemoryEventBus,
+    InMemoryRegistrationSessionRepository.pipe(
+      Layer.provide(Layer.mergeAll(InMemoryEventStore, InMemoryEventBus))
+    )
   );
 
   describe("受け入れ条件", () => {
