@@ -42,7 +42,8 @@ describe("Enrollment", () => {
       expect(enrollment.courseId).toBe(courseId);
       expect(enrollment.term).toBe(term);
       expect(enrollment.status._tag).toBe("Requested");
-      expect(Option.isNone(enrollment.grade)).toBe(true);
+      expect(enrollment.hasGrade()).toBe(false);
+      expect(Option.isNone(enrollment.getGrade())).toBe(true);
       expect(enrollment.version).toBe(1);
     });
 
@@ -90,7 +91,6 @@ describe("Enrollment", () => {
           approvedAt: new Date(),
           approvedBy: NonEmptyString.make("advisor@university.edu")
         }),
-        grade: Option.none(),
         version: 2
       });
 
@@ -109,7 +109,6 @@ describe("Enrollment", () => {
         courseId,
         term,
         status: new InProgress({ startedAt: new Date() }),
-        grade: Option.none(),
         version: 3
       });
 
@@ -131,7 +130,6 @@ describe("Enrollment", () => {
           completedAt: new Date(),
           grade: "A" as Grade
         }),
-        grade: Option.some("A" as Grade),
         version: 4
       });
 
@@ -169,10 +167,10 @@ describe("Enrollment", () => {
           completedAt: new Date(),
           grade
         }),
-        grade: Option.some(grade),
         version: 4
       });
 
+      expect(enrollment.hasGrade()).toBe(true);
       const retrievedGrade = enrollment.getGrade();
       expect(Option.isSome(retrievedGrade)).toBe(true);
       if (Option.isSome(retrievedGrade)) {
@@ -246,6 +244,246 @@ describe("Enrollment", () => {
       expect(parsed.studentId).toBe(studentId);
       expect(parsed.courseId).toBe(courseId);
       expect(parsed.term).toBe(term);
+    });
+  });
+
+  describe("追加のテストケース", () => {
+    describe("statusTagプロパティ", () => {
+      it("現在の状態タグを正しく返す", () => {
+        const requestedEnrollment = Enrollment.create(
+          enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term
+        );
+        expect(requestedEnrollment.statusTag).toBe("Requested");
+
+        const approvedEnrollment = new Enrollment({
+          id: enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term,
+          status: new Approved({
+            approvedAt: new Date(),
+            approvedBy: NonEmptyString.make("advisor@university.edu")
+          }),
+          version: 2
+        });
+        expect(approvedEnrollment.statusTag).toBe("Approved");
+      });
+    });
+
+    describe("終了状態からの遷移", () => {
+      it("Cancelled状態からは何も遷移できない", () => {
+        const enrollment = new Enrollment({
+          id: enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term,
+          status: new Cancelled({
+            cancelledAt: new Date(),
+            reason: NonEmptyString.make("セッションが却下されたため")
+          }),
+          version: 3
+        });
+
+        expect(enrollment.canApprove()).toBe(false);
+        expect(enrollment.canStart()).toBe(false);
+        expect(enrollment.canComplete()).toBe(false);
+        expect(enrollment.canWithdraw()).toBe(false);
+        expect(enrollment.canCancel()).toBe(false);
+      });
+
+      it("Withdrawn状態からは何も遷移できない", () => {
+        const enrollment = new Enrollment({
+          id: enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term,
+          status: new Withdrawn({
+            withdrawnAt: new Date(),
+            reason: Option.none()
+          }),
+          version: 4
+        });
+
+        expect(enrollment.canApprove()).toBe(false);
+        expect(enrollment.canStart()).toBe(false);
+        expect(enrollment.canComplete()).toBe(false);
+        expect(enrollment.canWithdraw()).toBe(false);
+        expect(enrollment.canCancel()).toBe(false);
+      });
+    });
+
+    describe("Data.Classの機能", () => {
+      it("同じデータを持つインスタンスは等価", () => {
+        const date = new Date();
+        const enrollment1 = new Enrollment({
+          id: enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term,
+          status: new Requested({ requestedAt: date }),
+          version: 1
+        });
+
+        const enrollment2 = new Enrollment({
+          id: enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term,
+          status: new Requested({ requestedAt: date }),
+          version: 1
+        });
+
+        expect(enrollment1).toEqual(enrollment2);
+      });
+
+      it("異なるデータを持つインスタンスは非等価", () => {
+        const enrollment1 = Enrollment.create(
+          enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term
+        );
+
+        const enrollment2 = new Enrollment({
+          ...enrollment1,
+          version: 2
+        });
+
+        expect(enrollment1).not.toEqual(enrollment2);
+      });
+    });
+
+    describe("成績へのアクセス", () => {
+      it("CompletedとWithdrawn以外の状態ではhasGradeがfalse", () => {
+        const states: EnrollmentStatus[] = [
+          new Requested({ requestedAt: new Date() }),
+          new Approved({ approvedAt: new Date(), approvedBy: NonEmptyString.make("advisor") }),
+          new InProgress({ startedAt: new Date() }),
+          new Cancelled({ cancelledAt: new Date(), reason: NonEmptyString.make("理由") })
+        ];
+
+        states.forEach(status => {
+          const enrollment = new Enrollment({
+            id: enrollmentId,
+            sessionId,
+            studentId,
+            courseId,
+            term,
+            status,
+            version: 1
+          });
+          
+          expect(enrollment.hasGrade()).toBe(false);
+          expect(Option.isNone(enrollment.getGrade())).toBe(true);
+        });
+      });
+
+      it("Withdrawn状態では成績は常にW", () => {
+        const enrollment = new Enrollment({
+          id: enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term,
+          status: new Withdrawn({
+            withdrawnAt: new Date(),
+            reason: Option.some(NonEmptyString.make("健康上の理由"))
+          }),
+          version: 3
+        });
+
+        // Withdrawnの場合、成績は常に"W"を返す
+        expect(enrollment.hasGrade()).toBe(true);
+        const grade = enrollment.getGrade();
+        expect(Option.isSome(grade)).toBe(true);
+        if (Option.isSome(grade)) {
+          expect(grade.value).toBe("W");
+        }
+      });
+
+      it("Withdrawn状態では理由に関わらず成績はW", () => {
+        // 理由あり
+        const enrollmentWithReason = new Enrollment({
+          id: enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term,
+          status: new Withdrawn({
+            withdrawnAt: new Date(),
+            reason: Option.some(NonEmptyString.make("個人的な事情"))
+          }),
+          version: 3
+        });
+
+        // 理由なし
+        const enrollmentWithoutReason = new Enrollment({
+          id: EnrollmentId.create(studentId, CourseId.make("C000102"), term),
+          sessionId,
+          studentId,
+          courseId: CourseId.make("C000102"),
+          term,
+          status: new Withdrawn({
+            withdrawnAt: new Date(),
+            reason: Option.none()
+          }),
+          version: 3
+        });
+
+        // 両方とも"W"を返す
+        [enrollmentWithReason, enrollmentWithoutReason].forEach(enrollment => {
+          expect(enrollment.hasGrade()).toBe(true);
+          const grade = enrollment.getGrade();
+          expect(Option.isSome(grade)).toBe(true);
+          if (Option.isSome(grade)) {
+            expect(grade.value).toBe("W");
+          }
+        });
+      });
+    });
+
+    describe("バージョン管理", () => {
+      it("新規作成時のバージョンは1", () => {
+        const enrollment = Enrollment.create(
+          enrollmentId,
+          sessionId,
+          studentId,
+          courseId,
+          term
+        );
+
+        expect(enrollment.version).toBe(1);
+      });
+
+      it("バージョンは正の整数である", () => {
+        const versions = [1, 2, 10, 100];
+        
+        versions.forEach(version => {
+          const enrollment = new Enrollment({
+            id: enrollmentId,
+            sessionId,
+            studentId,
+            courseId,
+            term,
+            status: new Requested({ requestedAt: new Date() }),
+            version
+          });
+          
+          expect(enrollment.version).toBe(version);
+          expect(enrollment.version).toBeGreaterThan(0);
+          expect(Number.isInteger(enrollment.version)).toBe(true);
+        });
+      });
     });
   });
 });

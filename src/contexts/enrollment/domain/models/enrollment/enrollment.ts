@@ -48,7 +48,6 @@ export class Enrollment extends Data.Class<{
   readonly courseId: CourseId;
   readonly term: Term;
   readonly status: EnrollmentStatus;
-  readonly grade: Option.Option<Grade>;
   readonly version: number;
 }> {
   // 新規履修の作成
@@ -66,7 +65,6 @@ export class Enrollment extends Data.Class<{
       courseId,
       term,
       status: new Requested({ requestedAt: new Date() }),
-      grade: Option.none(),
       version: 1
     });
   }
@@ -98,13 +96,16 @@ export class Enrollment extends Data.Class<{
 
   // 成績が設定されているかチェック
   hasGrade(): boolean {
-    return Option.isSome(this.grade);
+    return this.status._tag === "Completed" || this.status._tag === "Withdrawn";
   }
 
-  // 成績を取得（Completed状態の場合）
+  // 成績を取得（Completed状態またはWithdrawn状態の場合）
   getGrade(): Option.Option<Grade> {
     if (this.status._tag === "Completed") {
       return Option.some(this.status.grade);
+    }
+    if (this.status._tag === "Withdrawn") {
+      return Option.some("W" as Grade);
     }
     return Option.none();
   }
