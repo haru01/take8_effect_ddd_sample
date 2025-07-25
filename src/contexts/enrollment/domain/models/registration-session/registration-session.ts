@@ -1,4 +1,4 @@
-import { Data } from "effect";
+import { Data, Effect } from "effect";
 import {
   RegistrationSessionId,
   StudentId,
@@ -7,6 +7,7 @@ import {
   EnrollmentId,
   NonEmptyString
 } from "../shared/value-objects.js";
+import { InvalidSessionState, DuplicateCourseInSession, MaxUnitsExceeded } from "../../errors/domain-errors.js";
 
 // --- 履修登録セッション状態（代数データ型） ---
 export class Draft extends Data.TaggedClass("Draft")<{
@@ -105,3 +106,35 @@ export class RegistrationSession extends Data.Class<{
 // --- ビジネスルール定数 ---
 export const MAX_UNITS_PER_TERM = 20;
 export const MIN_UNITS_PER_TERM = 12;
+
+// --- バリデーション関数群 ---
+
+export const validateDraftState = (session: RegistrationSession) =>
+  session.canModifyCourses()
+    ? Effect.void
+    : Effect.fail(new InvalidSessionState({
+        sessionId: session.id,
+        currentState: session.statusTag,
+        attemptedAction: "addCourses"
+      }));
+
+export const validateNoDuplicates = (session: RegistrationSession, courses: ReadonlyArray<CourseInfo>) => {
+  const duplicates = session.findDuplicateCourses(courses.map(c => c.courseId));
+  return duplicates.length === 0
+    ? Effect.void
+    : Effect.fail(new DuplicateCourseInSession({
+        sessionId: session.id,
+        duplicateCourseIds: duplicates
+      }));
+};
+
+export const validateUnitLimit = (session: RegistrationSession, courses: ReadonlyArray<CourseInfo>) => {
+  const newTotal = session.totalUnits + courses.reduce((sum, c) => sum + c.units, 0);
+  return newTotal <= MAX_UNITS_PER_TERM
+    ? Effect.void
+    : Effect.fail(new MaxUnitsExceeded({
+        currentUnits: session.totalUnits,
+        requestedUnits: courses.reduce((sum, c) => sum + c.units, 0),
+        maxUnits: MAX_UNITS_PER_TERM
+      }));
+};

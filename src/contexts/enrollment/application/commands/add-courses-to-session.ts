@@ -1,66 +1,20 @@
 import { Effect } from "effect";
 import { RegistrationSessionId } from "../../domain/models/shared/value-objects.js";
-import { CourseInfo, RegistrationSession, MAX_UNITS_PER_TERM } from "../../domain/models/registration-session/registration-session.js";
+import { CourseInfo } from "../../domain/models/registration-session/registration-session.js";
 import { RegistrationSessionRepository } from "../../domain/repositories/registration-session-repository.js";
 import { EventStore } from "../../../shared/kernel/types/event-store.js";
 import { EventBus } from "../../../shared/kernel/types/event-bus.js";
 import { CoursesAddedToSession, EnrollmentsRequestedBatch } from "../../domain/events/registration-session-events.js";
 import { EnrollmentId } from "../../domain/models/shared/value-objects.js";
-import { InvalidSessionState, DuplicateCourseInSession, MaxUnitsExceeded } from "../../domain/errors/domain-errors.js";
+import { createValidationBuilder } from "../validation/validation-builder.js";
+import { validateDraftState, validateNoDuplicates, validateUnitLimit } from "../../domain/models/registration-session/registration-session.js";
 
 export interface AddCoursesToSessionCommand {
   readonly sessionId: RegistrationSessionId;
   readonly courses: ReadonlyArray<CourseInfo>;
 }
 
-// 個別バリデーション関数群（ビジネスルールの明示化）
-
-// セッションがDraft状態であることを検証
-const validateセッションがドラフト状態であること = (
-  session: RegistrationSession
-): Effect.Effect<void, InvalidSessionState> =>
-  Effect.gen(function* () {
-    if (!session.canModifyCourses()) {
-      return yield* Effect.fail(new InvalidSessionState({
-        sessionId: session.id,
-        currentState: session.statusTag,
-        attemptedAction: "addCourses"
-      }));
-    }
-  });
-
-// 科目が重複していないことを検証
-const validate科目が重複していないこと = (
-  session: RegistrationSession,
-  courses: ReadonlyArray<CourseInfo>
-): Effect.Effect<void, DuplicateCourseInSession> =>
-  Effect.gen(function* () {
-    const courseIds = courses.map(c => c.courseId);
-    const duplicates = session.findDuplicateCourses(courseIds);
-    if (duplicates.length > 0) {
-      return yield* Effect.fail(new DuplicateCourseInSession({
-        sessionId: session.id,
-        duplicateCourseIds: duplicates
-      }));
-    }
-  });
-
-// 単位数上限を超えていないことを検証
-const validate単位数上限を超えていないこと = (
-  session: RegistrationSession,
-  courses: ReadonlyArray<CourseInfo>
-): Effect.Effect<void, MaxUnitsExceeded> =>
-  Effect.gen(function* () {
-    const requestedUnits = courses.reduce((sum, course) => sum + course.units, 0);
-    const newTotalUnits = session.totalUnits + requestedUnits;
-    if (newTotalUnits > MAX_UNITS_PER_TERM) {
-      return yield* Effect.fail(new MaxUnitsExceeded({
-        currentUnits: session.totalUnits,
-        requestedUnits,
-        maxUnits: MAX_UNITS_PER_TERM
-      }));
-    }
-  });
+// バリデーション関数はドメインサービスから利用
 
 export const addCoursesToSession = (
   command: AddCoursesToSessionCommand
@@ -75,10 +29,14 @@ export const addCoursesToSession = (
     // 1. セッション存在確認・取得 (Repository経由で集約再構築)
     const session = yield* repository.findById(sessionId);
 
-    // 2. ビジネスルール検証（明示的なバリデーション）
-    yield* validateセッションがドラフト状態であること(session);
-    yield* validate科目が重複していないこと(session, courses);
-    yield* validate単位数上限を超えていないこと(session, courses);
+    // 2. ビジネスルール検証（ビルダーパターンによるバリデーション）
+    const validation = createValidationBuilder()
+      .add(validateDraftState(session))
+      .add(validateNoDuplicates(session, courses))
+      .add(validateUnitLimit(session, courses))
+      .execute();
+
+    yield* validation;
 
     // 3. 科目追加イベント生成・保存
     const coursesAddedEvent = new CoursesAddedToSession({
