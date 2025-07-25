@@ -2,7 +2,7 @@ import { Effect, Layer } from "effect";
 import { RegistrationSession, Draft, EnrollmentEntry } from "../../domain/models/registration-session/registration-session.js";
 import { RegistrationSessionRepository } from "../../domain/repositories/registration-session-repository.js";
 import { EventStore } from "../../../shared/kernel/types/event-store.js";
-import { DomainEvent, RegistrationSessionCreated, EnrollmentsRequestedBatch } from "../../domain/events/registration-session-events.js";
+import { DomainEvent, RegistrationSessionCreated, CoursesAddedToSession } from "../../domain/events/registration-session-events.js";
 import { SessionNotFound, ReconstructionFailed } from "../../domain/errors/domain-errors.js";
 
 // イベントからRegistrationSessionを再構築する関数
@@ -45,14 +45,9 @@ const reconstructFromEvents = (
       
       switch (event._tag) {
         case "CoursesAddedToSession": {
-          // CoursesAddedToSessionイベントは記録するが、EnrollmentsRequestedBatchで実際の履修エントリを追加する
-          break;
-        }
-        
-        case "EnrollmentsRequestedBatch": {
-          const enrollmentsRequestedEvent = event as EnrollmentsRequestedBatch;
+          const coursesAddedEvent = event as CoursesAddedToSession;
           // 履修エントリを追加してセッション状態を更新
-          const newEnrollments: EnrollmentEntry[] = enrollmentsRequestedEvent.enrollmentRequests.map(req => ({
+          const newEnrollments: EnrollmentEntry[] = coursesAddedEvent.enrollmentRequests.map(req => ({
             enrollmentId: req.enrollmentId,
             courseId: req.courseId,
             units: req.units

@@ -170,12 +170,12 @@ export const assertCoursesAddedSuccessfully = (assertion: CourseAdditionAssertio
   Effect.gen(function* () {
     const { sessionId, addedCourses, capturedEvents } = assertion;
     
-    // イベントが2つ発行されていることを確認 (CoursesAddedToSession + EnrollmentsRequestedBatch)
+    // イベントが1つ発行されていることを確認 (CoursesAddedToSession)
     const events = yield* Ref.get(capturedEvents);
     const courseAdditionEvents = events.filter(e => 
-      e._tag === "CoursesAddedToSession" || e._tag === "EnrollmentsRequestedBatch"
+      e._tag === "CoursesAddedToSession"
     );
-    expect(courseAdditionEvents).toHaveLength(2);
+    expect(courseAdditionEvents).toHaveLength(1);
     
     // CoursesAddedToSessionイベントの確認
     const coursesAddedEvent = events.find(e => e._tag === "CoursesAddedToSession");
@@ -183,16 +183,8 @@ export const assertCoursesAddedSuccessfully = (assertion: CourseAdditionAssertio
     if (coursesAddedEvent && coursesAddedEvent._tag === "CoursesAddedToSession") {
       expect(coursesAddedEvent.sessionId).toBe(sessionId);
       expect(coursesAddedEvent.addedCourses).toEqual(addedCourses);
+      expect(coursesAddedEvent.enrollmentRequests).toHaveLength(addedCourses.length);
       expect(coursesAddedEvent.addedAt).toBeInstanceOf(Date);
-    }
-    
-    // EnrollmentsRequestedBatchイベントの確認
-    const enrollmentsRequestedEvent = events.find(e => e._tag === "EnrollmentsRequestedBatch");
-    expect(enrollmentsRequestedEvent).toBeDefined();
-    if (enrollmentsRequestedEvent && enrollmentsRequestedEvent._tag === "EnrollmentsRequestedBatch") {
-      expect(enrollmentsRequestedEvent.sessionId).toBe(sessionId);
-      expect(enrollmentsRequestedEvent.enrollmentRequests).toHaveLength(addedCourses.length);
-      expect(enrollmentsRequestedEvent.requestedAt).toBeInstanceOf(Date);
     }
     
     // リポジトリでのセッション状態確認（イベント再生で状態が更新されることを確認）

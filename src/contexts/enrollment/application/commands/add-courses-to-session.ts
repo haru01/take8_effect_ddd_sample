@@ -4,7 +4,7 @@ import { CourseInfo } from "../../domain/models/registration-session/registratio
 import { RegistrationSessionRepository } from "../../domain/repositories/registration-session-repository.js";
 import { EventStore } from "../../../shared/kernel/types/event-store.js";
 import { EventBus } from "../../../shared/kernel/types/event-bus.js";
-import { CoursesAddedToSession, EnrollmentsRequestedBatch } from "../../domain/events/registration-session-events.js";
+import { CoursesAddedToSession } from "../../domain/events/registration-session-events.js";
 import { EnrollmentId } from "../../domain/models/shared/value-objects.js";
 import { createValidationBuilder } from "../validation/validation-builder.js";
 import { validateDraftState, validateNoDuplicates, validateUnitLimit } from "../../domain/models/registration-session/registration-session.js";
@@ -38,16 +38,7 @@ export const addCoursesToSession = (
 
     yield* validation;
 
-    // 3. 科目追加イベント生成・保存
-    const coursesAddedEvent = new CoursesAddedToSession({
-      sessionId,
-      addedCourses: courses,
-      addedAt: new Date()
-    });
-
-    yield* eventStore.appendEvent(sessionId, "RegistrationSession", coursesAddedEvent);
-
-    // 4. 履修要求バッチイベント生成・保存
+    // 3. 履修要求情報生成
     const enrollmentRequests = courses.map(course => {
       const enrollmentId = EnrollmentId.create(session.studentId, course.courseId, session.term);
       return {
@@ -57,17 +48,18 @@ export const addCoursesToSession = (
       };
     });
 
-    const enrollmentsRequestedEvent = new EnrollmentsRequestedBatch({
+    // 4. 統合イベント生成・保存
+    const coursesAddedEvent = new CoursesAddedToSession({
       sessionId,
+      addedCourses: courses,
       enrollmentRequests,
-      requestedAt: new Date()
+      addedAt: new Date()
     });
 
-    yield* eventStore.appendEvent(sessionId, "RegistrationSession", enrollmentsRequestedEvent);
+    yield* eventStore.appendEvent(sessionId, "RegistrationSession", coursesAddedEvent);
 
     // 5. イベントパブリッシュ
     yield* eventBus.publish(coursesAddedEvent);
-    yield* eventBus.publish(enrollmentsRequestedEvent);
 
     return sessionId;
   });

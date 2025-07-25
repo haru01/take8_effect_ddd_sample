@@ -14,17 +14,12 @@ export class RegistrationSessionCreated extends Data.TaggedClass("RegistrationSe
 export class CoursesAddedToSession extends Data.TaggedClass("CoursesAddedToSession")<{
   readonly sessionId: RegistrationSessionId;
   readonly addedCourses: ReadonlyArray<CourseInfo>;
-  readonly addedAt: Date;
-}> {}
-
-export class EnrollmentsRequestedBatch extends Data.TaggedClass("EnrollmentsRequestedBatch")<{
-  readonly sessionId: RegistrationSessionId;
   readonly enrollmentRequests: ReadonlyArray<{
     readonly enrollmentId: EnrollmentId;
     readonly courseId: CourseId;
     readonly units: number;
   }>;
-  readonly requestedAt: Date;
+  readonly addedAt: Date;
 }> {}
 
 // 将来的に追加されるその他のセッションイベント（コメントアウト）
@@ -50,8 +45,7 @@ export class RegistrationSessionRejected extends Data.TaggedClass("RegistrationS
 
 export type RegistrationSessionEvent =
   | RegistrationSessionCreated
-  | CoursesAddedToSession
-  | EnrollmentsRequestedBatch;
+  | CoursesAddedToSession;
   // | RegistrationSessionSubmitted
   // | RegistrationSessionApproved
   // | RegistrationSessionRejected;
