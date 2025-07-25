@@ -1,13 +1,12 @@
-import { Data, Effect } from "effect";
-import { 
-  RegistrationSessionId, 
-  StudentId, 
+import { Data } from "effect";
+import {
+  RegistrationSessionId,
+  StudentId,
   Term,
   CourseId,
   EnrollmentId,
   NonEmptyString
 } from "../shared/value-objects.js";
-import { MaxUnitsExceeded, DuplicateCourseInSession, InvalidSessionState } from "../../errors/domain-errors.js";
 
 // --- 履修登録セッション状態（代数データ型） ---
 export class Draft extends Data.TaggedClass("Draft")<{
@@ -100,45 +99,6 @@ export class RegistrationSession extends Data.Class<{
   // 現在の状態タグを取得
   get statusTag(): string {
     return this.status._tag;
-  }
-
-  // 科目追加の事前条件チェック
-  validateCoursesAddition(courses: ReadonlyArray<CourseInfo>): Effect.Effect<
-    void,
-    MaxUnitsExceeded | DuplicateCourseInSession | InvalidSessionState
-  > {
-    const self = this;
-    return Effect.gen(function* () {
-      // 1. Draft状態チェック
-      if (!self.canModifyCourses()) {
-        return yield* Effect.fail(new InvalidSessionState({
-          sessionId: self.id,
-          currentState: self.statusTag,
-          attemptedAction: "addCourses"
-        }));
-      }
-
-      // 2. 重複科目チェック
-      const courseIds = courses.map(c => c.courseId);
-      const duplicates = self.findDuplicateCourses(courseIds);
-      if (duplicates.length > 0) {
-        return yield* Effect.fail(new DuplicateCourseInSession({
-          sessionId: self.id,
-          duplicateCourseIds: duplicates
-        }));
-      }
-
-      // 3. 単位数上限チェック
-      const requestedUnits = courses.reduce((sum, course) => sum + course.units, 0);
-      const newTotalUnits = self.totalUnits + requestedUnits;
-      if (newTotalUnits > MAX_UNITS_PER_TERM) {
-        return yield* Effect.fail(new MaxUnitsExceeded({
-          currentUnits: self.totalUnits,
-          requestedUnits,
-          maxUnits: MAX_UNITS_PER_TERM
-        }));
-      }
-    });
   }
 }
 
