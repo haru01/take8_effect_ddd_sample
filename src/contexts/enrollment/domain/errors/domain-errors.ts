@@ -30,8 +30,6 @@ export class ReconstructionFailed extends Data.TaggedError("ReconstructionFailed
   }
 }
 
-// 将来的に追加される可能性のあるエラー（コメントアウト）
-/*
 export class InvalidSessionState extends Data.TaggedError("InvalidSessionState")<{
   readonly sessionId: RegistrationSessionId;
   readonly currentState: string;
@@ -51,9 +49,20 @@ export class MaxUnitsExceeded extends Data.TaggedError("MaxUnitsExceeded")<{
     return `最大単位数を超過します: 現在=${this.currentUnits}, 追加要求=${this.requestedUnits}, 最大=${this.maxUnits}`;
   }
 }
-*/
+
+export class DuplicateCourseInSession extends Data.TaggedError("DuplicateCourseInSession")<{
+  readonly sessionId: RegistrationSessionId;
+  readonly duplicateCourseIds: ReadonlyArray<string>;
+}> {
+  get message() {
+    return `セッションに重複する科目があります: セッションID=${this.sessionId}, 重複科目=${this.duplicateCourseIds.join(", ")}`;
+  }
+}
 
 export type DomainError =
   | SessionAlreadyExists
   | SessionNotFound
-  | ReconstructionFailed;
+  | ReconstructionFailed
+  | InvalidSessionState
+  | MaxUnitsExceeded
+  | DuplicateCourseInSession;

@@ -1,9 +1,10 @@
 import { Effect, Ref } from "effect";
 import { expect } from "vitest";
-import { RegistrationSession } from "../../src/contexts/enrollment/domain/models/registration-session/registration-session.js";
+import { RegistrationSession, CourseInfo } from "../../src/contexts/enrollment/domain/models/registration-session/registration-session.js";
 import { RegistrationSessionRepository } from "../../src/contexts/enrollment/domain/repositories/registration-session-repository.js";
-import { RegistrationSessionId, StudentId, Term } from "../../src/contexts/enrollment/domain/models/shared/value-objects.js";
+import { RegistrationSessionId, StudentId, Term, CourseId } from "../../src/contexts/enrollment/domain/models/shared/value-objects.js";
 import { DomainEvent } from "../../src/contexts/enrollment/domain/events/registration-session-events.js";
+import { MaxUnitsExceeded, DuplicateCourseInSession, SessionNotFound } from "../../src/contexts/enrollment/domain/errors/domain-errors.js";
 
 // セッション作成アサーション用のヘルパー型
 export interface SessionCreationAssertion {
@@ -153,4 +154,82 @@ export const assertSessionInDraftState = (session: RegistrationSession) => {
 export const assertValidationError = (error: any, expectedMessage: string) => {
   expect(error).toBeDefined();
   expect(error.message).toContain(expectedMessage);
+};
+
+// --- 科目追加関連のアサーション ---
+
+// 科目追加成功アサーション用のヘルパー型
+export interface CourseAdditionAssertion {
+  sessionId: RegistrationSessionId;
+  addedCourses: ReadonlyArray<CourseInfo>;
+  capturedEvents: Ref.Ref<DomainEvent[]>;
+}
+
+// 科目追加成功の包括的アサーション
+export const assertCoursesAddedSuccessfully = (assertion: CourseAdditionAssertion) =>
+  Effect.gen(function* () {
+    const { sessionId, addedCourses, capturedEvents } = assertion;
+    
+    // イベントが2つ発行されていることを確認 (CoursesAddedToSession + EnrollmentsRequestedBatch)
+    const events = yield* Ref.get(capturedEvents);
+    const courseAdditionEvents = events.filter(e => 
+      e._tag === "CoursesAddedToSession" || e._tag === "EnrollmentsRequestedBatch"
+    );
+    expect(courseAdditionEvents).toHaveLength(2);
+    
+    // CoursesAddedToSessionイベントの確認
+    const coursesAddedEvent = events.find(e => e._tag === "CoursesAddedToSession");
+    expect(coursesAddedEvent).toBeDefined();
+    if (coursesAddedEvent && coursesAddedEvent._tag === "CoursesAddedToSession") {
+      expect(coursesAddedEvent.sessionId).toBe(sessionId);
+      expect(coursesAddedEvent.addedCourses).toEqual(addedCourses);
+      expect(coursesAddedEvent.addedAt).toBeInstanceOf(Date);
+    }
+    
+    // EnrollmentsRequestedBatchイベントの確認
+    const enrollmentsRequestedEvent = events.find(e => e._tag === "EnrollmentsRequestedBatch");
+    expect(enrollmentsRequestedEvent).toBeDefined();
+    if (enrollmentsRequestedEvent && enrollmentsRequestedEvent._tag === "EnrollmentsRequestedBatch") {
+      expect(enrollmentsRequestedEvent.sessionId).toBe(sessionId);
+      expect(enrollmentsRequestedEvent.enrollmentRequests).toHaveLength(addedCourses.length);
+      expect(enrollmentsRequestedEvent.requestedAt).toBeInstanceOf(Date);
+    }
+    
+    // リポジトリでのセッション状態確認（イベント再生で状態が更新されることを確認）
+    const repository = yield* RegistrationSessionRepository;
+    const updatedSession = yield* repository.findById(sessionId);
+    expect(updatedSession.enrollments).toHaveLength(addedCourses.length);
+    
+    // 追加された科目の単位数が反映されていることを確認
+    const expectedUnits = addedCourses.reduce((sum, course) => sum + course.units, 0);
+    expect(updatedSession.totalUnits).toBe(expectedUnits);
+  });
+
+// 単位数上限超過エラーのアサーション
+export const assertMaxUnitsExceededError = (
+  error: any,
+  expectedUnits: { currentUnits: number; requestedUnits: number; maxUnits: number }
+) => {
+  expect(error._tag).toBe("MaxUnitsExceeded");
+  expect(error.currentUnits).toBe(expectedUnits.currentUnits);
+  expect(error.requestedUnits).toBe(expectedUnits.requestedUnits);
+  expect(error.maxUnits).toBe(expectedUnits.maxUnits);
+};
+
+// 重複科目エラーのアサーション
+export const assertDuplicateCourseError = (
+  error: any,
+  expectedDuplicateCourseIds: ReadonlyArray<CourseId>
+) => {
+  expect(error._tag).toBe("DuplicateCourseInSession");
+  expect(error.duplicateCourseIds).toEqual(expectedDuplicateCourseIds);
+};
+
+// セッション未存在エラーのアサーション
+export const assertSessionNotFoundError = (
+  error: any,
+  expectedSessionId: RegistrationSessionId
+) => {
+  expect(error._tag).toBe("SessionNotFound");
+  expect(error.sessionId).toBe(expectedSessionId);
 };

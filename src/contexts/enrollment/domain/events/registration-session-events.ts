@@ -1,5 +1,6 @@
 import { Data } from "effect";
-import { RegistrationSessionId, StudentId, Term } from "../models/shared/value-objects.js";
+import { RegistrationSessionId, StudentId, Term, CourseId, EnrollmentId } from "../models/shared/value-objects.js";
+import { CourseInfo } from "../models/registration-session/registration-session.js";
 
 // --- 履修登録セッション関連ドメインイベント ---
 
@@ -8,6 +9,22 @@ export class RegistrationSessionCreated extends Data.TaggedClass("RegistrationSe
   readonly studentId: StudentId;
   readonly term: Term;
   readonly createdAt: Date;
+}> {}
+
+export class CoursesAddedToSession extends Data.TaggedClass("CoursesAddedToSession")<{
+  readonly sessionId: RegistrationSessionId;
+  readonly addedCourses: ReadonlyArray<CourseInfo>;
+  readonly addedAt: Date;
+}> {}
+
+export class EnrollmentsRequestedBatch extends Data.TaggedClass("EnrollmentsRequestedBatch")<{
+  readonly sessionId: RegistrationSessionId;
+  readonly enrollmentRequests: ReadonlyArray<{
+    readonly enrollmentId: EnrollmentId;
+    readonly courseId: CourseId;
+    readonly units: number;
+  }>;
+  readonly requestedAt: Date;
 }> {}
 
 // 将来的に追加されるその他のセッションイベント（コメントアウト）
@@ -32,7 +49,9 @@ export class RegistrationSessionRejected extends Data.TaggedClass("RegistrationS
 */
 
 export type RegistrationSessionEvent =
-  | RegistrationSessionCreated;
+  | RegistrationSessionCreated
+  | CoursesAddedToSession
+  | EnrollmentsRequestedBatch;
   // | RegistrationSessionSubmitted
   // | RegistrationSessionApproved
   // | RegistrationSessionRejected;
