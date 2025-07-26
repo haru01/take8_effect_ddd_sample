@@ -161,7 +161,6 @@ export const addCoursesToSession = (command: AddCoursesToSessionCommand) =>
       .add(validateNoDuplicates(session, courses))
       .add(validateUnitLimit(session, courses))
       .execute();
-
     yield* validation;
 
     // 3. 統合イベント生成・保存
@@ -374,7 +373,6 @@ export const addCoursesToSession = (command: AddCoursesToSessionCommand) =>
       .add(validateNoDuplicates(session, courses))
       .add(validateUnitLimit(session, courses))
       .execute();
-
     yield* validation;
 
     // 3. 統合イベント生成・保存
@@ -420,7 +418,6 @@ export const submitRegistrationSession = (command: SubmitRegistrationSessionComm
       .add(validateDraftState(session))
       .add(validateMinimumUnits(session))
       .execute();
-
     yield* validation;
 
     // 3. 提出イベント生成・保存

@@ -35,7 +35,6 @@ export const addCoursesToSession = (
       .add(validateNoDuplicates(session, courses))
       .add(validateUnitLimit(session, courses))
       .execute();
-
     yield* validation;
 
     // 3. 履修要求情報生成
