@@ -6,7 +6,7 @@ import { EventStore } from "../../../shared/kernel/types/event-store.js";
 import { EventBus } from "../../../shared/kernel/types/event-bus.js";
 import { CoursesAddedToSession } from "../../domain/events/registration-session-events.js";
 import { EnrollmentId } from "../../domain/models/shared/value-objects.js";
-import { createValidationBuilder } from "../validation/validation-builder.js";
+import { createValidationBuilder } from "../../../shared/kernel/validation/validation-builder.js";
 import { validateDraftState, validateNoDuplicates, validateUnitLimit } from "../../domain/models/registration-session/registration-session.js";
 
 export interface AddCoursesToSessionCommand {
@@ -35,7 +35,6 @@ export const addCoursesToSession = (
       .add(validateNoDuplicates(session, courses))
       .add(validateUnitLimit(session, courses))
       .execute();
-
     yield* validation;
 
     // 3. 履修要求情報生成
