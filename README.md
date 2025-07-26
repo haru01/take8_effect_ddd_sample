@@ -232,3 +232,28 @@ tests/
 - **テスト**: Vitest (受け入れテスト, Unit)
 - **データベース**: インメモリ → PostgreSQL
 - **CI/CD**: GitHub Actions (予定)
+
+## Claude Code エージェント システム
+
+本プロジェクトでは開発効率化のため、特化型エージェントシステムを活用しています。
+
+### 基本的な使い方
+
+```bash
+# 新機能実装
+/task-committer "ストーリー3：履修登録提出機能を実装"
+
+# 要件整理  
+/domain-expert "科目削除機能のユーザーストーリーを作成"
+
+# 技術設計
+/design-task-committer "履修開始機能のCQRS設計とタスク分解"
+
+# コード改善
+/refactor-committer "バリデーション関数の共通化"
+
+# 品質検証
+/qa-committer "ストーリー3のテスト網羅性を検証"
+```
+
+**詳細な活用ガイド**: [CLAUDE.md](./CLAUDE.md#claude-code-エージェントシステム活用ガイド)を参照
