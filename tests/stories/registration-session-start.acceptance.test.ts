@@ -2,7 +2,7 @@ import { describe, it } from "vitest";
 import { Effect, Layer, Ref } from "effect";
 import { createRegistrationSession } from "../../src/contexts/enrollment/application/commands/create-registration-session.js";
 import { StudentId, Term } from "../../src/contexts/enrollment/domain/models/shared/value-objects.js";
-import { SessionAlreadyExists } from "../../src/contexts/enrollment/domain/errors/domain-errors.js";
+import { SessionAlreadyExists, InvalidRegistrationSessionId } from "../../src/contexts/enrollment/domain/errors/domain-errors.js";
 import { InMemoryEventStore } from "../../src/contexts/shared/infrastructure/event-store/in-memory-event-store.js";
 import { InMemoryRegistrationSessionRepository } from "../../src/contexts/enrollment/infrastructure/persistence/in-memory-registration-session-repository.js";
 import { InMemoryEventBus } from "../../src/contexts/shared/infrastructure/event-bus/in-memory-event-bus.js";
@@ -15,7 +15,7 @@ import {
   assertEventCount,
   assertSessionInDraftState,
   assertSessionExistsInRepository,
-  assertValidationError
+  assertInvalidRegistrationSessionIdError
 } from "../helpers/assertions.js";
 
 describe("受け入れテスト: 履修登録セッション開始", () => {
@@ -167,7 +167,7 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
         }).pipe(Effect.flip);
 
         // Assert - 複合キー生成時のバリデーションエラーがコマンド層まで伝播することを確認
-        assertValidationError(commandError, "セッションIDは'S12345678:YYYY-Season'形式である必要があります");
+        assertInvalidRegistrationSessionIdError(commandError as InvalidRegistrationSessionId, "INVALID", "2024-Spring");
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
@@ -186,7 +186,7 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
         }).pipe(Effect.flip);
 
         // Assert - 複合キー生成時のバリデーションエラーがコマンド層まで伝播することを確認
-        assertValidationError(commandError, "セッションIDは'S12345678:YYYY-Season'形式である必要があります");
+        assertInvalidRegistrationSessionIdError(commandError as InvalidRegistrationSessionId, "S12345678", "BAD-TERM");
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)

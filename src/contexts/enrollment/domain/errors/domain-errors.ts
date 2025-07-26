@@ -59,10 +59,41 @@ export class DuplicateCourseInSession extends Data.TaggedError("DuplicateCourseI
   }
 }
 
+export class InvalidStudentId extends Data.TaggedError("InvalidStudentId")<{
+  readonly value: string;
+  readonly reason: string;
+}> {
+  get message() {
+    return `無効な学生IDです: 値="${this.value}", 理由="${this.reason}"`;
+  }
+}
+
+export class InvalidTerm extends Data.TaggedError("InvalidTerm")<{
+  readonly value: string;
+  readonly reason: string;
+}> {
+  get message() {
+    return `無効な学期です: 値="${this.value}", 理由="${this.reason}"`;
+  }
+}
+
+export class InvalidRegistrationSessionId extends Data.TaggedError("InvalidRegistrationSessionId")<{
+  readonly studentId: string;
+  readonly term: string;
+  readonly reason: string;
+}> {
+  get message() {
+    return `無効な履修登録セッションIDです: 学生ID="${this.studentId}", 学期="${this.term}", 理由="${this.reason}"`;
+  }
+}
+
 export type DomainError =
   | SessionAlreadyExists
   | SessionNotFound
   | ReconstructionFailed
   | InvalidSessionState
   | MaxUnitsExceeded
-  | DuplicateCourseInSession;
+  | DuplicateCourseInSession
+  | InvalidStudentId
+  | InvalidTerm
+  | InvalidRegistrationSessionId;
