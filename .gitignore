@@ -12,3 +12,4 @@ dist/
 coverage/
 .nyc_output/
 MEMO.md
+.claude/tmp/
