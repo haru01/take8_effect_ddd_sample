@@ -723,3 +723,149 @@ qa-committer "実装品質の最終検証"
 - 品質基準の段階的向上
 
 このエージェントシステムにより、**一貫した品質** と **効率的な開発** を両立し、プロダクション対応の履修管理システムを構築します。
+
+## エージェント連携フローと成果物管理
+
+### エージェント間のファイル連携体系
+
+#### 1. 成果物の保存場所
+すべてのエージェント成果物は `.claude/tmp/` ディレクトリに統一保存：
+
+```
+.claude/tmp/
+├── handoff-context.md                    # 全エージェント参照必須
+├── {story-name}-user-story.md           # domain-expert 出力
+├── {story-name}-technical-design.md     # design-task-committer 出力
+├── {story-name}-implementation-tasks.md # design-task-committer 出力
+└── templates/{story-name}/              # design-task-committer 出力
+    ├── domain-events.ts                 # イベント定義テンプレート
+    ├── domain-errors.ts                 # エラー定義テンプレート
+    ├── domain-logic.ts                  # ビジネスロジックテンプレート
+    └── application-commands.ts          # コマンドテンプレート
+```
+
+#### 2. エージェント連携フロー詳細
+
+```mermaid
+graph TD
+    A[domain-expert] -->|user-story.md| B[design-task-committer]
+    B -->|technical-design.md<br/>implementation-tasks.md<br/>templates/| C[task-committer]
+    C -->|実装完成| D{品質改善が必要?}
+    D -->|Yes| E[refactor-committer]
+    D -->|No| F[qa-committer]
+    E -->|リファクタリング完成| F[qa-committer]
+    F -->|品質検証完了| G[完成]
+    
+    H[.claude/tmp/handoff-context.md] -.->|全エージェント参照| A
+    H -.->|全エージェント参照| B
+    H -.->|全エージェント参照| C
+    H -.->|全エージェント参照| E
+    H -.->|全エージェント参照| F
+```
+
+#### 3. エージェント別参照ファイル
+
+##### domain-expert 参照
+- **必須**: `.claude/tmp/handoff-context.md`
+- **技術制約**: `CLAUDE.md`
+- **既存ストーリー**: `.claude/tmp/*-user-story.md` （整合性確認）
+
+##### design-task-committer 参照
+- **必須**: `.claude/tmp/handoff-context.md`
+- **技術制約**: `CLAUDE.md`
+- **業務要件**: `.claude/tmp/{story-name}-user-story.md` （domain-expert出力）
+- **既存設計**: `.claude/tmp/*-technical-design.md` （整合性確認）
+
+##### task-committer 参照
+- **必須**: `.claude/tmp/handoff-context.md`
+- **技術制約**: `CLAUDE.md`
+- **業務要件**: `.claude/tmp/{story-name}-user-story.md`
+- **技術設計**: `.claude/tmp/{story-name}-technical-design.md`
+- **実装タスク**: `.claude/tmp/{story-name}-implementation-tasks.md`
+- **コードテンプレート**: `.claude/tmp/templates/{story-name}/`
+
+##### refactor-committer 参照
+- **必須**: `.claude/tmp/handoff-context.md`
+- **技術制約**: `CLAUDE.md`
+- **技術設計**: `.claude/tmp/*-technical-design.md` （改善意図理解）
+- **実装タスク**: `.claude/tmp/*-implementation-tasks.md` （完了状況確認）
+- **既存コード**: 実装済みコードベース
+
+##### qa-committer 参照
+- **必須**: `.claude/tmp/handoff-context.md`
+- **技術制約**: `CLAUDE.md`
+- **業務要件**: `.claude/tmp/{story-name}-user-story.md` （受け入れ条件確認）
+- **技術設計**: `.claude/tmp/{story-name}-technical-design.md` （設計適合性）
+- **実装タスク**: `.claude/tmp/{story-name}-implementation-tasks.md` （完了状況）
+- **既存テスト**: `tests/` ディレクトリ
+- **実装結果**: 完成したコードベース
+
+### 標準作業フロー
+
+#### ストーリー実装の完全フロー
+```bash
+# 1. 要件定義フェーズ
+domain-expert "ストーリー3: 履修登録提出機能のユーザーストーリーを作成"
+# 出力: .claude/tmp/story3-submission-user-story.md
+
+# 2. 技術設計フェーズ
+design-task-committer "ストーリー3の技術設計とタスク分解を行って"
+# 出力: .claude/tmp/story3-submission-technical-design.md
+#       .claude/tmp/story3-submission-implementation-tasks.md
+#       .claude/tmp/templates/story3-submission/
+
+# 3. 実装フェーズ
+task-committer "ストーリー3: 履修登録提出機能を実装してください"
+# 成果: 動作するコード、通過するテスト
+
+# 4. 品質向上フェーズ（必要に応じて）
+refactor-committer "ストーリー3の実装コードの品質改善"
+
+# 5. 品質検証フェーズ
+qa-committer "ストーリー3の品質検証とテスト強化"
+```
+
+#### 複雑な機能の段階的開発
+```bash
+# Phase 1: 要件詳細化
+domain-expert "履修完了・成績付与機能の詳細要件を整理"
+qa-committer "受け入れテストパターンの事前検討"
+
+# Phase 2: 設計分割
+design-task-committer "履修完了・成績付与機能を段階的に実装可能な設計に分割"
+
+# Phase 3: 段階的実装
+task-committer "第1フェーズ: 履修完了処理を実装"
+qa-committer "第1フェーズの品質検証"
+task-committer "第2フェーズ: 成績付与処理を実装"
+qa-committer "第2フェーズの品質検証"
+
+# Phase 4: 統合・最終化
+refactor-committer "全体の統合とコード品質最終調整"
+qa-committer "機能全体の最終品質検証"
+```
+
+### 品質保証の連携ポイント
+
+#### 各エージェントの品質責任
+- **domain-expert**: 業務要件の完全性・整合性
+- **design-task-committer**: 技術設計の健全性・実装可能性
+- **task-committer**: コード品質・テスト通過・機能完成
+- **refactor-committer**: 内部品質・保守性・技術的負債解消
+- **qa-committer**: 総合品質・テスト網羅性・品質基準適合
+
+#### 品質チェックポイント
+1. **要件定義後**: domain-expert ↔ qa-committer の相互確認
+2. **技術設計後**: design-task-committer ↔ qa-committer の設計レビュー
+3. **実装完了後**: task-committer → qa-committer の品質検証
+4. **リファクタリング後**: refactor-committer → qa-committer の最終確認
+
+### トラブルシューティング
+
+#### エージェント連携の問題と対処
+- **成果物不整合**: handoff-context.md の更新とエージェント間の再確認
+- **品質基準齟齬**: CLAUDE.md の品質基準セクション参照
+- **実装方針相違**: 技術設計書の再確認と design-task-committer への相談
+- **テスト不十分**: qa-committer による追加テスト戦略の策定
+
+この体系的なエージェント連携により、**一貫した品質** と **効率的な開発サイクル** を実現します。
