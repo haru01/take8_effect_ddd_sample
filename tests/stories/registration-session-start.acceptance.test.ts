@@ -18,7 +18,7 @@ import {
   assertValidationError
 } from "../helpers/assertions.js";
 
-describe("Story 1: 履修登録セッション開始", () => {
+describe("受け入れテスト: 履修登録セッション開始", () => {
   // EventStoreとEventBusを先に提供し、それを使ってRepositoryを構築し、全てをマージ
   const TestLayer = Layer.mergeAll(
     InMemoryEventStore,
