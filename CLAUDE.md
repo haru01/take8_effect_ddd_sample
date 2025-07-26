@@ -400,7 +400,7 @@ export const addCoursesToSession = (command) =>
   Effect.gen(function* () {
     const session = yield* repository.findById(sessionId);
     const event = yield* addCoursesToSessionDomain(session, courses);
-    
+
     yield* eventStore.appendEvent(sessionId, "RegistrationSession", event);
     yield* eventBus.publish(event);
     return sessionId;
@@ -447,7 +447,7 @@ export const submitRegistrationSession = (command: SubmitRegistrationSessionComm
   Effect.gen(function* () {
     const session = yield* repository.findById(sessionId);
     const event = yield* submitRegistrationSessionDomain(session);
-    
+
     yield* eventStore.appendEvent(sessionId, "RegistrationSession", event);
     yield* eventBus.publish(event);
     return sessionId;
@@ -499,8 +499,8 @@ export const submitRegistrationSession = (command: SubmitRegistrationSessionComm
 ### 開発環境セットアップ
 ```bash
 npm install
-npm run test        # 全テスト実行（65テスト）
-npm run test:coverage # カバレッジ確認（91.87%）
+npm run test        # 全テスト実行
+npm run test:coverage # カバレッジ確認
 npm run dev         # デモプログラム実行
 npm run typecheck   # TypeScript型チェック
 ```
@@ -558,6 +558,13 @@ expect(events.length).toBe(1);
 yield* assertSessionCreatedSuccessfully({
   sessionId, expectedStudentId, expectedTerm, capturedEvents
 });
+
+// ✅ 良い例: Effect.flipによる失敗テスト
+const error = yield* createRegistrationSession({ studentId, term }).pipe(
+  Effect.flip
+);
+// エラーをSuccessとして扱い、その後アサーション
+assertDuplicateSessionError(error, expectedSessionId);
 ```
 
 ## まとめ
@@ -599,12 +606,12 @@ yield* assertSessionCreatedSuccessfully({
 - **成果物**: ユーザーストーリー、受け入れ条件、ビジネスルール仕様
 - **使用例**: `domain-expert "科目削除・置換機能のストーリーを作成"`
 
-#### 🏗️ design-task-committer（CQRS設計特化型開発者）
+#### 🏗️ pre-design-committer（CQRS設計特化型開発者）
 **専門領域**: CQRS/イベントソーシングの技術設計
 - **主要責任**: ストーリーの技術タスク分解、ドメインイベント設計、アーキテクチャパターン適用
 - **適用場面**: 新機能の技術設計、複雑な業務フローの分析、実装前の設計検証、エンジニアタスクに分解
 - **成果物**: タスク分解リスト、ドメインイベント仕様、技術設計書
-- **使用例**: `design-task-committer "履修開始機能のCQRS設計"`
+- **使用例**: `pre-design-committer "履修開始機能のCQRS設計"`
 
 #### 🔧 refactor-committer（リファクタリング専門開発者）
 **専門領域**: コード品質向上と技術的負債解消
@@ -632,7 +639,7 @@ domain-expert "新機能 [機能名] のユーザーストーリーと受け入�
 #### Phase 2: 技術設計・タスク分解
 ```bash
 # 設計エージェントによる技術設計
-design-task-committer "ストーリー [番号] の技術設計とタスク分解"
+pre-design-committer "ストーリー [番号] の技術設計とタスク分解"
 ```
 **成果物**: 技術設計書、実装タスクリスト、ドメインイベント仕様
 
@@ -661,7 +668,7 @@ qa-committer "機能 [対象] の品質検証とテスト強化"
 
 #### ストーリー実装の標準フロー
 1. **要件明確化**: `domain-expert` で受け入れ条件を精緻化
-2. **技術設計**: `design-task-committer` でCQRS設計・タスク分解
+2. **技術設計**: `pre-design-committer` でCQRS設計・タスク分解
 3. **実装**: `task-committer` で確実なタスク完成
 4. **内部品質向上**: `refactor-committer` で必要に応じてリファクタリング
 5. **品質検証**: `qa-committer` でテスト品質確保
@@ -670,12 +677,12 @@ qa-committer "機能 [対象] の品質検証とテスト強化"
 ```bash
 # 段階的なエージェント連携
 domain-expert "履修完了・成績付与機能の要件整理してください"
-qa-committer "受け入れテストパターンを作成してください"
-design-task-committer "履修完了・成績付与機能の実現するための設計をしてください"
-design-task-committer "エンジニアタスクに分解してください"
+qa-committer "受け入れテストパターンを見直してください"
+pre-design-committer "履修完了・成績付与機能の実現するための設計とタスク分解してください"
+refactor-committer "履修完了・成績付与機能を実装しやすくするためのリファクタリング案を提案してください"
 task-committer "計画に基づき履修完了・成績付与機能の実装を行ってください"
-refactor-committer "リファクタリング案を提案して。まだ実装しないでください"
-qa-committer "実装品質の最終検証"
+refactor-committer "履修完了・成績付与機能のコードをリファクタリングしてください"
+qa-committer "履修完了・成績付与機能の品質検証を行ってください"
 ```
 
 ### エージェント設定のカスタマイズ
@@ -683,7 +690,7 @@ qa-committer "実装品質の最終検証"
 #### プロジェクト固有の制約・パターン
 - **Effect-TSパターンの強制**: Brand型、Schema、Layer型の使用
 - **テストファースト開発**: 受け入れテストからの実装開始
-- **カバレッジ維持**: 91.87%以上のカバレッジ維持
+- **カバレッジ維持**: 90%以上のカバレッジ維持
 - **型安全性**: `any`型使用禁止、完全な型注釈
 
 #### 品質基準の統一
@@ -696,7 +703,7 @@ qa-committer "実装品質の最終検証"
 
 #### 1. 適切なエージェント選択
 - **要件不明時**: `domain-expert` で要件明確化
-- **設計段階**: `design-task-committer` で技術設計
+- **設計段階**: `pre-design-committer` で技術設計
 - **実装段階**: `task-committer` で確実な完成
 - **品質課題**: `refactor-committer` や `qa-committer` で改善
 
@@ -729,74 +736,55 @@ qa-committer "実装品質の最終検証"
 ### エージェント間のファイル連携体系
 
 #### 1. 成果物の保存場所
-すべてのエージェント成果物は `.claude/tmp/` ディレクトリに統一保存：
+すべてのエージェント成果物は `.claude/tmp/` ディレクトリにストーリー単位でグループ化して保存：
 
 ```
 .claude/tmp/
-├── handoff-context.md                    # 全エージェント参照必須
-├── {story-name}-user-story.md           # domain-expert 出力
-├── {story-name}-technical-design.md     # design-task-committer 出力
-├── {story-name}-implementation-tasks.md # design-task-committer 出力
-└── templates/{story-name}/              # design-task-committer 出力
-    ├── domain-events.ts                 # イベント定義テンプレート
-    ├── domain-errors.ts                 # エラー定義テンプレート
-    ├── domain-logic.ts                  # ビジネスロジックテンプレート
-    └── application-commands.ts          # コマンドテンプレート
+└── {story-name}/                        # ストーリー単位のディレクトリ
+    ├── user-story.md                    # domain-expert 出力
+    ├── design-and-tasks.md              # pre-design-committer 出力
+    ├── qa-report.md                     # qa-committer 出力
+    └── test-improvements.md             # qa-committer 出力
 ```
 
 #### 2. エージェント連携フロー詳細
 
 ```mermaid
 graph TD
-    A[domain-expert] -->|user-story.md| B[design-task-committer]
-    B -->|technical-design.md<br/>implementation-tasks.md<br/>templates/| C[task-committer]
+    A[domain-expert] -->|user-story.md| B[pre-design-committer]
+    B -->|design-and-tasks.md| C[task-committer]
     C -->|実装完成| D{品質改善が必要?}
     D -->|Yes| E[refactor-committer]
     D -->|No| F[qa-committer]
     E -->|リファクタリング完成| F[qa-committer]
     F -->|品質検証完了| G[完成]
-    
-    H[.claude/tmp/handoff-context.md] -.->|全エージェント参照| A
-    H -.->|全エージェント参照| B
-    H -.->|全エージェント参照| C
-    H -.->|全エージェント参照| E
-    H -.->|全エージェント参照| F
+
 ```
 
 #### 3. エージェント別参照ファイル
 
 ##### domain-expert 参照
-- **必須**: `.claude/tmp/handoff-context.md`
 - **技術制約**: `CLAUDE.md`
-- **既存ストーリー**: `.claude/tmp/*-user-story.md` （整合性確認）
 
-##### design-task-committer 参照
-- **必須**: `.claude/tmp/handoff-context.md`
+##### pre-design-committer 参照
 - **技術制約**: `CLAUDE.md`
-- **業務要件**: `.claude/tmp/{story-name}-user-story.md` （domain-expert出力）
-- **既存設計**: `.claude/tmp/*-technical-design.md` （整合性確認）
+- **業務要件**: `.claude/tmp/{story-name}/user-story.md` （domain-expert出力）
 
 ##### task-committer 参照
-- **必須**: `.claude/tmp/handoff-context.md`
 - **技術制約**: `CLAUDE.md`
-- **業務要件**: `.claude/tmp/{story-name}-user-story.md`
-- **技術設計**: `.claude/tmp/{story-name}-technical-design.md`
-- **実装タスク**: `.claude/tmp/{story-name}-implementation-tasks.md`
-- **コードテンプレート**: `.claude/tmp/templates/{story-name}/`
+- **業務要件**: `.claude/tmp/{story-name}/user-story.md`
+- **技術設計と分解したタスク**: `.claude/tmp/{story-name}/design-and-tasks.md`
 
 ##### refactor-committer 参照
-- **必須**: `.claude/tmp/handoff-context.md`
 - **技術制約**: `CLAUDE.md`
-- **技術設計**: `.claude/tmp/*-technical-design.md` （改善意図理解）
-- **実装タスク**: `.claude/tmp/*-implementation-tasks.md` （完了状況確認）
+- **業務要件**: `.claude/tmp/{story-name}/user-story.md` （domain-expertの出力）
+- **技術設計と分解したタスク**: `.claude/tmp/{story-name}/design-and-tasks.md` （pre-design-committerの出力）
 - **既存コード**: 実装済みコードベース
 
 ##### qa-committer 参照
-- **必須**: `.claude/tmp/handoff-context.md`
 - **技術制約**: `CLAUDE.md`
-- **業務要件**: `.claude/tmp/{story-name}-user-story.md` （受け入れ条件確認）
-- **技術設計**: `.claude/tmp/{story-name}-technical-design.md` （設計適合性）
-- **実装タスク**: `.claude/tmp/{story-name}-implementation-tasks.md` （完了状況）
+- **業務要件**: `.claude/tmp/{story-name}/user-story.md` （受け入れ条件確認）
+- **技術設計と分解したタスク**: `.claude/tmp/{story-name}/design-and-tasks.md`
 - **既存テスト**: `tests/` ディレクトリ
 - **実装結果**: 完成したコードベース
 
@@ -806,23 +794,23 @@ graph TD
 ```bash
 # 1. 要件定義フェーズ
 domain-expert "ストーリー3: 履修登録提出機能のユーザーストーリーを作成"
-# 出力: .claude/tmp/story3-submission-user-story.md
+# 出力: .claude/tmp/story3-submission/user-story.md
 
 # 2. 技術設計フェーズ
-design-task-committer "ストーリー3の技術設計とタスク分解を行って"
-# 出力: .claude/tmp/story3-submission-technical-design.md
-#       .claude/tmp/story3-submission-implementation-tasks.md
-#       .claude/tmp/templates/story3-submission/
+pre-design-committer "ストーリー3の技術設計とタスク分解を行って"
+# 出力: .claude/tmp/story3-submission/design-and-tasks.md
 
 # 3. 実装フェーズ
 task-committer "ストーリー3: 履修登録提出機能を実装してください"
 # 成果: 動作するコード、通過するテスト
 
 # 4. 品質向上フェーズ（必要に応じて）
-refactor-committer "ストーリー3の実装コードの品質改善"
+refactor-committer "ストーリー3の実装コードの品質向上のためのリファクタリング案を提案して"
 
 # 5. 品質検証フェーズ
 qa-committer "ストーリー3の品質検証とテスト強化"
+# 出力: .claude/tmp/story3-submission/qa-report.md
+#       .claude/tmp/story3-submission/test-improvements.md
 ```
 
 #### 複雑な機能の段階的開発
@@ -832,7 +820,7 @@ domain-expert "履修完了・成績付与機能の詳細要件を整理"
 qa-committer "受け入れテストパターンの事前検討"
 
 # Phase 2: 設計分割
-design-task-committer "履修完了・成績付与機能を段階的に実装可能な設計に分割"
+pre-design-committer "履修完了・成績付与機能を段階的に実装可能な設計に分割"
 
 # Phase 3: 段階的実装
 task-committer "第1フェーズ: 履修完了処理を実装"
@@ -849,23 +837,22 @@ qa-committer "機能全体の最終品質検証"
 
 #### 各エージェントの品質責任
 - **domain-expert**: 業務要件の完全性・整合性
-- **design-task-committer**: 技術設計の健全性・実装可能性
+- **pre-design-committer**: 技術設計の健全性・実装可能性
 - **task-committer**: コード品質・テスト通過・機能完成
 - **refactor-committer**: 内部品質・保守性・技術的負債解消
 - **qa-committer**: 総合品質・テスト網羅性・品質基準適合
 
 #### 品質チェックポイント
 1. **要件定義後**: domain-expert ↔ qa-committer の相互確認
-2. **技術設計後**: design-task-committer ↔ qa-committer の設計レビュー
+2. **技術設計後**: pre-design-committer ↔ qa-committer の設計レビュー
 3. **実装完了後**: task-committer → qa-committer の品質検証
 4. **リファクタリング後**: refactor-committer → qa-committer の最終確認
 
 ### トラブルシューティング
 
 #### エージェント連携の問題と対処
-- **成果物不整合**: handoff-context.md の更新とエージェント間の再確認
 - **品質基準齟齬**: CLAUDE.md の品質基準セクション参照
-- **実装方針相違**: 技術設計書の再確認と design-task-committer への相談
+- **実装方針相違**: 技術設計書の再確認と pre-design-committer への相談
 - **テスト不十分**: qa-committer による追加テスト戦略の策定
 
 この体系的なエージェント連携により、**一貫した品質** と **効率的な開発サイクル** を実現します。

@@ -241,23 +241,42 @@ tests/
 ### 基本的な使い方
 
 ```bash
-# 要件整理
-domain-expert: として振る舞ってください。あなたの得意なことを教えてください。
+```bash
+# 1. 要件定義フェーズ
+domain-expert "ストーリー3: 履修登録提出機能のユーザーストーリーを作成"
+# 出力: .claude/tmp/story3-submission/user-story.md
 
-# 品質検証
-qa-committer: として振る舞ってください。あなたの得意なことを教えてください。
+# 2. 技術設計フェーズ
+pre-design-committer "ストーリー3の技術設計とタスク分解を行って"
+# 出力: .claude/tmp/story3-submission/design-and-tasks.md
 
-# 技術設計
-design-task-committer として振る舞ってください。あなたの得意なことを教えてください。
+# 3. 実装フェーズ
+task-committer "ストーリー3: 履修登録提出機能を実装してください"
+# 成果: 動作するコード、通過するテスト
 
-# 新機能実装
-task-committer: として振る舞ってください。あなたの得意なことを教えてください。
+# 4. 品質向上フェーズ（必要に応じて）
+refactor-committer "ストーリー3の実装コードの品質向上のためのリファクタリング案を提案して"
 
-# コード改善
-refactor-committer: として振る舞ってください。あなたの得意なことを教えてください。
+# 5. 品質検証フェーズ
+qa-committer "ストーリー3の品質検証とテスト強化"
+# 出力: .claude/tmp/story3-submission/qa-report.md
+#       .claude/tmp/story3-submission/test-improvements.md
 
 # 役割確認
 あなたは今どのエージェントとして振る舞っていますか？ 他に選べるエージェントを紹介してください。
+```
+
+### エージェント成果物の管理
+
+各エージェントの成果物は、ストーリー名でグループ化して管理されます：
+
+```
+.claude/tmp/
+└── {story-name}/                       # ストーリー単位のディレクトリ
+    ├── user-story.md                   # domain-expert 出力
+    ├── design-and-tasks.md             # pre-design-committer 出力
+    ├── qa-report.md                    # qa-committer 出力
+    ├── test-improvements.md            # qa-committer 出力
 ```
 
 **詳細な活用ガイド**: [CLAUDE.md](./CLAUDE.md#claude-code-エージェントシステム活用ガイド)を参照
