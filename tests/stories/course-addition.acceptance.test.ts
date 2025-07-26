@@ -16,7 +16,7 @@ import {
   assertSessionNotFoundError
 } from "../helpers/assertions.js";
 
-describe("Story 2: 科目一括追加", () => {
+describe("受け入れテスト: 科目一括追加", () => {
   const TestLayer = Layer.mergeAll(
     InMemoryEventStore,
     InMemoryEventBus,
