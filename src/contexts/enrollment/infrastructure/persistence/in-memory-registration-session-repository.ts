@@ -6,6 +6,8 @@ import { DomainEvent, RegistrationSessionCreated, CoursesAddedToSession } from "
 import { SessionNotFound, ReconstructionFailed } from "../../domain/errors/domain-errors.js";
 
 // イベントからRegistrationSessionを再構築する関数
+// この関数は、イベントのリストを受け取り、セッションの状態を再構築します。
+// XXX: ドメインイベントを購読して、最新の状態を構築してキャッシュするなどの最適化は行っていません。
 const reconstructFromEvents = (
   events: ReadonlyArray<DomainEvent>
 ): Effect.Effect<RegistrationSession, ReconstructionFailed> => {
@@ -27,7 +29,7 @@ const reconstructFromEvents = (
     }
 
     const createdEvent = firstEvent as RegistrationSessionCreated;
-    
+
     // 初期状態を作成
     let session = new RegistrationSession({
       id: createdEvent.sessionId,
@@ -42,7 +44,7 @@ const reconstructFromEvents = (
     // 残りのイベントを適用してセッション状態を再構築
     for (let i = 1; i < events.length; i++) {
       const event = events[i];
-      
+
       switch (event._tag) {
         case "CoursesAddedToSession": {
           const coursesAddedEvent = event as CoursesAddedToSession;
@@ -52,9 +54,9 @@ const reconstructFromEvents = (
             courseId: req.courseId,
             units: req.units
           }));
-          
+
           const newTotalUnits = session.totalUnits + newEnrollments.reduce((sum, e) => sum + e.units, 0);
-          
+
           session = new RegistrationSession({
             ...session,
             enrollments: [...session.enrollments, ...newEnrollments],
@@ -63,7 +65,7 @@ const reconstructFromEvents = (
           });
           break;
         }
-        
+
         default:
           // 未知のイベントタイプは警告するが処理は続行
           console.warn(`未処理のイベントタイプ: ${event._tag}`);
@@ -87,7 +89,7 @@ export const InMemoryRegistrationSessionRepository = Layer.effect(
           const session = yield* reconstructFromEvents(events);
           return session;
         }).pipe(
-          Effect.catchAll(() => 
+          Effect.catchAll(() =>
             Effect.fail(new SessionNotFound({ sessionId: id }))
           )
         )
