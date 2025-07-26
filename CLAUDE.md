@@ -127,7 +127,7 @@ export class DuplicateCourseInSession extends Data.TaggedError("DuplicateCourseI
 
 `src/contexts/enrollment/application/commands/create-registration-session.ts`
 ```typescript
-// セッション作成コマンド
+// セッション作成コマンド（簡素化されたアプリケーション層）
 export const createRegistrationSession = (command: CreateRegistrationSessionCommand) =>
   Effect.gen(function* () {
     // 1. セッションID生成（複合キー）
@@ -136,11 +136,11 @@ export const createRegistrationSession = (command: CreateRegistrationSessionComm
     // 2. 重複チェック
     yield* ensureNotExists(sessionId);
 
-    // 3. イベント作成・保存
-    const event = new RegistrationSessionCreated({ ... });
-    yield* eventStore.appendEvent(sessionId, "RegistrationSession", event);
+    // 3. ドメインロジックでイベント作成
+    const event = createRegistrationSessionEvent(sessionId, studentId, term);
 
-    // 4. イベントパブリッシュ
+    // 4. イベント保存・パブリッシュ（インフラ関連のみ）
+    yield* eventStore.appendEvent(sessionId, "RegistrationSession", event);
     yield* eventBus.publish(event);
 
     return sessionId;
@@ -149,28 +149,16 @@ export const createRegistrationSession = (command: CreateRegistrationSessionComm
 
 `src/contexts/enrollment/application/commands/add-courses-to-session.ts`
 ```typescript
-// 科目一括追加コマンド
+// 科目一括追加コマンド（簡素化されたアプリケーション層）
 export const addCoursesToSession = (command: AddCoursesToSessionCommand) =>
   Effect.gen(function* () {
     // 1. セッション存在確認・取得
     const session = yield* repository.findById(sessionId);
 
-    // 2. 関数型バリデーションビルダーによるビジネスルール検証
-    const validation = createValidationBuilder()
-      .add(validateDraftState(session))
-      .add(validateNoDuplicates(session, courses))
-      .add(validateUnitLimit(session, courses))
-      .execute();
-    yield* validation;
+    // 2. ドメインロジック実行（バリデーション・イベント生成）
+    const coursesAddedEvent = yield* addCoursesToSessionDomain(session, courses);
 
-    // 3. 統合イベント生成・保存
-    const coursesAddedEvent = new CoursesAddedToSession({
-      sessionId,
-      addedCourses: courses,
-      enrollmentRequests, // 履修要求情報も同時に生成
-      addedAt: new Date()
-    });
-
+    // 3. イベント保存・パブリッシュ（インフラ関連のみ）
     yield* eventStore.appendEvent(sessionId, "RegistrationSession", coursesAddedEvent);
     yield* eventBus.publish(coursesAddedEvent);
 
@@ -248,25 +236,54 @@ const program = Effect.gen(function* () {
 });
 ```
 
-#### 7. バリデーション基盤
+#### 7. ドメインロジック関数
 
-**関数型バリデーションビルダー** (`src/contexts/enrollment/application/validation/validation-builder.ts`)
+**ドメインロジック配置** (`src/contexts/enrollment/domain/models/registration-session/registration-session.ts`)
 ```typescript
-// 関数型コンポジションによるバリデーション
-export const createValidationBuilder = (): ValidationBuilder => ({
-  validations: [],
-  add: function<E2>(validation: Effect.Effect<void, E2>) {
+// ドメインイベント生成関数
+export const createRegistrationSession = (
+  sessionId: RegistrationSessionId,
+  studentId: StudentId,
+  term: Term
+): RegistrationSessionCreated => {
+  return new RegistrationSessionCreated({
+    sessionId,
+    studentId,
+    term,
+    createdAt: new Date()
+  });
+};
+
+// 科目追加のドメインロジック（バリデーション + イベント生成）
+export const addCoursesToSession = (
+  session: RegistrationSession,
+  courses: ReadonlyArray<CourseInfo>
+): Effect.Effect<
+  CoursesAddedToSession,
+  InvalidSessionState | DuplicateCourseInSession | MaxUnitsExceeded
+> => Effect.gen(function* () {
+  // シンプルな順次バリデーション
+  yield* validateDraftState(session);
+  yield* validateNoDuplicates(session, courses);
+  yield* validateUnitLimit(session, courses);
+
+  // 履修要求情報生成
+  const enrollmentRequests = courses.map(course => {
+    const enrollmentId = EnrollmentId.create(session.studentId, course.courseId, session.term);
     return {
-      validations: [...this.validations, validation],
-      add: this.add,
-      execute: this.execute
-    } as ValidationBuilder<E2>;
-  },
-  execute: function() {
-    return Effect.all(this.validations, { concurrency: "unbounded" }).pipe(
-      Effect.asVoid
-    );
-  }
+      enrollmentId,
+      courseId: course.courseId,
+      units: course.units
+    };
+  });
+
+  // イベント生成
+  return new CoursesAddedToSession({
+    sessionId: session.id,
+    addedCourses: courses,
+    enrollmentRequests,
+    addedAt: new Date()
+  });
 });
 ```
 
@@ -339,6 +356,7 @@ EnrollmentWithdrawn
 3. **イベントソーシング**: 完全な状態変更履歴の保持
 4. **テスト品質**: 91.87%カバレッジ + ストーリーベース受け入れテスト
 5. **エラーハンドリング**: Effect-TSによる型安全なエラー伝播
+6. **責務分離**: ドメインロジックが適切にドメイン層に配置
 
 ### 🟡 改善可能な点
 
@@ -361,31 +379,30 @@ EnrollmentWithdrawn
 
 **実装成果**:
 ```TypeScript
-// 完成済み実装
-export const addCoursesToSession = (command: AddCoursesToSessionCommand) =>
+// 完成済み実装（リファクタリング後）
+// ドメイン層
+export const addCoursesToSession = (
+  session: RegistrationSession,
+  courses: ReadonlyArray<CourseInfo>
+): Effect.Effect<CoursesAddedToSession, DomainErrors> =>
   Effect.gen(function* () {
-    // 1. セッション存在確認・取得
+    // シンプルな順次バリデーション
+    yield* validateDraftState(session);
+    yield* validateNoDuplicates(session, courses);
+    yield* validateUnitLimit(session, courses);
+
+    // ドメインイベント生成
+    return new CoursesAddedToSession({ ... });
+  });
+
+// アプリケーション層（簡素化）
+export const addCoursesToSession = (command) =>
+  Effect.gen(function* () {
     const session = yield* repository.findById(sessionId);
-
-    // 2. 関数型バリデーションビルダーによるビジネスルール検証
-    const validation = createValidationBuilder()
-      .add(validateDraftState(session))
-      .add(validateNoDuplicates(session, courses))
-      .add(validateUnitLimit(session, courses))
-      .execute();
-    yield* validation;
-
-    // 3. 統合イベント生成・保存
-    const coursesAddedEvent = new CoursesAddedToSession({
-      sessionId,
-      addedCourses: courses,
-      enrollmentRequests, // 履修要求情報も同時に生成
-      addedAt: new Date()
-    });
-
-    yield* eventStore.appendEvent(sessionId, "RegistrationSession", coursesAddedEvent);
-    yield* eventBus.publish(coursesAddedEvent);
-
+    const event = yield* addCoursesToSessionDomain(session, courses);
+    
+    yield* eventStore.appendEvent(sessionId, "RegistrationSession", event);
+    yield* eventBus.publish(event);
     return sessionId;
   });
 ```
@@ -393,9 +410,10 @@ export const addCoursesToSession = (command: AddCoursesToSessionCommand) =>
 **完了済みタスク**:
 - ✅ 受け入れテスト完全実装（`tests/stories/course-addition.acceptance.test.ts`）
 - ✅ ドメインイベント統合実装（`CoursesAddedToSession`）
-- ✅ 関数型バリデーションビルダーパターン
+- ✅ ドメインロジックのドメイン層への適切な配置
 - ✅ アプリケーションコマンド（`AddCoursesToSessionCommand`）
 - ✅ カスタムアサーション拡張完了
+- ✅ リファクタリング: バリデーションビルダー削除とシンプル化
 
 **達成成果**:
 - ✅ 全テスト通過維持
@@ -406,29 +424,32 @@ export const addCoursesToSession = (command: AddCoursesToSessionCommand) =>
 ### 🎯 Phase 2: ストーリー3実装（短期 1-2週間）
 **目標**: 履修登録提出機能完成
 
-**実装対象**（CLAUDE.md設計準拠）:
+**実装対象**（リファクタリング後のパターン準拠）:
 ```TypeScript
-export const submitRegistrationSession = (command: SubmitRegistrationSessionCommand) =>
+// ドメイン層
+export const submitRegistrationSession = (
+  session: RegistrationSession
+): Effect.Effect<RegistrationSessionSubmitted, InvalidSessionState | MinUnitsNotMet> =>
   Effect.gen(function* () {
-    // 1. セッション存在確認・取得
-    const session = yield* repository.findById(sessionId);
+    // シンプルな順次バリデーション
+    yield* validateDraftState(session);
+    yield* validateMinimumUnits(session);
 
-    // 2. 提出バリデーション
-    const validation = createValidationBuilder()
-      .add(validateDraftState(session))
-      .add(validateMinimumUnits(session))
-      .execute();
-    yield* validation;
-
-    // 3. 提出イベント生成・保存
-    const sessionSubmittedEvent = new RegistrationSessionSubmitted({
-      sessionId,
+    // ドメインイベント生成
+    return new RegistrationSessionSubmitted({
+      sessionId: session.id,
       submittedAt: new Date()
     });
+  });
 
-    yield* eventStore.appendEvent(sessionId, "RegistrationSession", sessionSubmittedEvent);
-    yield* eventBus.publish(sessionSubmittedEvent);
-
+// アプリケーション層
+export const submitRegistrationSession = (command: SubmitRegistrationSessionCommand) =>
+  Effect.gen(function* () {
+    const session = yield* repository.findById(sessionId);
+    const event = yield* submitRegistrationSessionDomain(session);
+    
+    yield* eventStore.appendEvent(sessionId, "RegistrationSession", event);
+    yield* eventBus.publish(event);
     return sessionId;
   });
 ```
@@ -500,6 +521,16 @@ function createSession(studentId: string, term: string) { ... }
 
 // ✅ 良い例: Brand型使用
 function createSession(studentId: StudentId, term: Term) { ... }
+
+// ❌ 悪い例: ドメインロジックがアプリケーション層に漏れる
+// application layer
+const event = new RegistrationSessionCreated({ ... });
+
+// ✅ 良い例: ドメインロジックはドメイン層に
+// domain layer
+export const createRegistrationSession = (...) => new RegistrationSessionCreated({ ... });
+// application layer
+const event = createRegistrationSession(...);
 ```
 
 #### アプリケーション層
