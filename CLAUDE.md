@@ -505,12 +505,105 @@ npm run dev         # デモプログラム実行
 npm run typecheck   # TypeScript型チェック
 ```
 
+### AcceptanceTDD開発手法（必須）
+
+#### 基本原則
+履修管理システムの開発では、**AcceptanceTDD（受け入れテスト駆動開発）**を必須開発手法として採用します。
+
+1. **段階的受け入れ条件実装**: 1つずつ受け入れ条件を完了させる
+2. **TDDサイクル遵守**: Red→Green→Refactorを各条件で実行  
+3. **最小限実装**: 各段階で過剰実装を避ける
+4. **継続的設計改善**: 各フェーズで設計品質を向上
+
+#### 実装フロー（標準パターン）
+
+```mermaid
+graph LR
+    A[受け入れ条件1] --> B[失敗テスト作成]
+    B --> C[最小限実装]
+    C --> D[テスト通過]
+    D --> E[リファクタリング]
+    E --> F[受け入れ条件2有効化]
+    F --> G[失敗テスト実行]
+    G --> H[実装追加]
+    H --> I[テスト通過]  
+    I --> J[リファクタリング]
+    J --> K[...続行]
+```
+
+#### 段階的実装戦略
+
+**Phase 1: 基本正常系（最重要）**
+- 最もビジネス価値の高い受け入れ条件を1つ選定
+- 失敗するテストを作成（Red状態）
+- 最小限の実装でテスト通過（Green状態）
+- 設計品質改善（Refactor）
+
+**Phase 2: 主要異常系（段階的拡張）**
+- 重要なエラーケースを1つずつ実装
+- 各条件でRed→Green→Refactorサイクル実行
+- エラーハンドリングの段階的構築
+
+**Phase 3: 境界値・エッジケース（完成）**  
+- 境界値テストの段階的実装
+- エッジケースの包括的カバー
+- 最終的な品質確保
+
+#### Acceptance Testファイル標準構成
+
+```typescript
+describe("Story X: [機能名]", () => {
+  // Phase 1: 基本正常系（最初はこれのみ有効）
+  it("AC1: [最重要な正常系受け入れ条件]", () => {
+    return Effect.gen(function* () {
+      // Arrange: テストデータ準備
+      // Act: 機能実行  
+      // Assert: 結果検証（カスタムアサーション使用）
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise);
+  });
+
+  // Phase 2以降: 最初は全てskip状態で実装
+  it.skip("AC2: [重要異常系1]", () => {
+    return Effect.gen(function* () {
+      // エラーケースの実装
+      const error = yield* command.pipe(Effect.flip);
+      assertSpecificError(error, expectedParams);
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise);
+  });
+
+  it.skip("AC3: [重要異常系2]", () => { ... });
+  it.skip("AC4: [境界値1]", () => { ... });
+  it.skip("AC5: [境界値2]", () => { ... });
+  it.skip("エッジケース1: [特殊ケース1]", () => { ... });
+});
+```
+
+#### 実装進行管理
+- **段階的テスト有効化**: `it.skip()` を `it()` に1つずつ変更
+- **コミット戦略**: 各フェーズ完了時に独立したコミット
+- **進捗確認**: 有効化されたテスト数での進捗把握
+
 ### コード規約
 1. **Effect-TS優先**: Promiseではなく常にEffectを使用
 2. **Brand型活用**: プリミティブ値には必ずBrand型を適用
 3. **不変性**: すべてのドメインオブジェクトはイミュータブル
-4. **テストファースト**: 新機能は必ず受け入れテストから開始
+4. **AcceptanceTDD必須**: 新機能は必ずAcceptanceTDDで段階的実装
 5. **型安全**: `any`型の使用禁止、完全な型注釈
+
+### AcceptanceTDD品質基準（必須）
+1. **段階的実装**: 受け入れ条件を1つずつ完了（一括実装禁止）
+2. **TDDサイクル**: 各受け入れ条件でRed→Green→Refactorサイクル実行
+3. **最小限実装**: 各フェーズで過剰実装回避、必要最小限の実装
+4. **継続的リファクタリング**: 各フェーズ完了時の設計品質向上
+5. **テスト進行管理**: `it.skip()` から `it()` への段階的変更記録
+6. **フェーズ別コミット**: Phase毎の独立したコミットによる進捗管理
+
+### テスト規約（プロトタイプフェーズ）
+1. **AcceptanceTDD優先**: 段階的受け入れテスト実装最優先
+2. **カスタムアサーション**: 複雑な検証ロジックは再利用可能な関数化
+3. **統合テスト保留**: プロトタイプフェーズでは受け入れテストで代替
+4. **90%+カバレッジ**: 品質基準の維持必須
+5. **ROI重視**: 投資対効果を考慮したテスト実装判断
 
 ### アーキテクチャパターン
 
@@ -549,10 +642,17 @@ const session = yield* repository.findById(sessionId).pipe(
 
 #### テスト
 ```typescript
-// ❌ 悪い例: 複雑なアサーション
-expect(session.id).toBe(expectedId);
-expect(session.status._tag).toBe("Draft");
-expect(events.length).toBe(1);
+// ❌ 悪い例: 実装詳細のテスト
+it("内部バリデーション関数を呼び出す", () => {
+  // 内部実装に依存するテスト
+});
+
+// ✅ 良い例: ビジネス価値のテスト
+it("AC1: 12単位以上のセッションを提出できる", async () => {
+  const sessionId = yield* setupTestSession(studentId, term, [4, 4, 4]);
+  yield* submitRegistrationSession({ sessionId, submittedBy: studentId });
+  yield* assertSessionSubmittedSuccessfully({ sessionId, capturedEvents });
+});
 
 // ✅ 良い例: カスタムアサーション使用
 yield* assertSessionCreatedSuccessfully({
@@ -627,6 +727,13 @@ assertDuplicateSessionError(error, expectedSessionId);
 - **成果物**: テスト戦略、品質レポート、追加テストケース
 - **使用例**: `qa-committer "ストーリー3のテスト網羅性を検証"`
 
+#### 🔄 reflect-committer（振り返り特化型開発者）
+**専門領域**: プロジェクトの自律的改善推進と継続的品質向上
+- **主要責任**: 成果物分析、Git履歴・チャットログ学習、エージェント設定最適化、CLAUDE.md進化
+- **適用場面**: ストーリー完了後振り返り、定期的全体レビュー、エージェント連携改善、プロセス最適化
+- **成果物**: 振り返りレポート、エージェント改善提案、CLAUDE.md更新、ワークフロー改善案
+- **使用例**: `reflect-committer "ストーリー3完了の振り返りと改善提案"`
+
 ### 開発フェーズ別エージェント活用戦略
 
 #### Phase 1: 要件定義・ストーリー作成
@@ -683,6 +790,7 @@ refactor-committer "履修完了・成績付与機能を実装しやすくする
 task-committer "計画に基づき履修完了・成績付与機能の実装を行ってください"
 refactor-committer "履修完了・成績付与機能のコードをリファクタリングしてください"
 qa-committer "履修完了・成績付与機能の品質検証を行ってください"
+reflect-committer "機能開発サイクルの振り返りと改善提案を行ってください"
 ```
 
 ### エージェント設定のカスタマイズ
@@ -725,9 +833,11 @@ qa-committer "履修完了・成績付与機能の品質検証を行ってくだ
 - **ui-committer**: フロントエンド実装特化型
 
 #### エージェント設定の継続改善
+- **reflect-committer主導**: データドリブンな設定最適化
 - プロジェクト進行に応じた設定の調整
 - 新たなパターン・制約の追加
 - 品質基準の段階的向上
+- 成功・失敗パターンの学習と反映
 
 このエージェントシステムにより、**一貫した品質** と **効率的な開発** を両立し、プロダクション対応の履修管理システムを構築します。
 
@@ -788,6 +898,13 @@ graph TD
 - **既存テスト**: `tests/` ディレクトリ
 - **実装結果**: 完成したコードベース
 
+##### reflect-committer 参照
+- **技術制約**: `CLAUDE.md`
+- **全エージェント成果物**: `.claude/tmp/` ディレクトリ全体
+- **Git作業履歴**: `git log`, `git diff main...HEAD`
+- **プロジェクト状況**: `README.md`, テスト結果, カバレッジ情報
+- **既存エージェント設定**: `.claude/agents/` ディレクトリ全体
+
 ### 標準作業フロー
 
 #### ストーリー実装の完全フロー
@@ -811,6 +928,11 @@ refactor-committer "ストーリー3の実装コードの品質向上のため�
 qa-committer "ストーリー3の品質検証とテスト強化"
 # 出力: .claude/tmp/story3-submission/qa-report.md
 #       .claude/tmp/story3-submission/test-improvements.md
+
+# 6. 振り返りフェーズ
+reflect-committer "ストーリー3完了の振り返りと改善提案"
+# 出力: .claude/tmp/reflections/{timestamp}/reflection-report.md
+#       エージェント設定・CLAUDE.mdの改善更新
 ```
 
 #### 複雑な機能の段階的開発
@@ -831,6 +953,7 @@ qa-committer "第2フェーズの品質検証"
 # Phase 4: 統合・最終化
 refactor-committer "全体の統合とコード品質最終調整"
 qa-committer "機能全体の最終品質検証"
+reflect-committer "複雑機能開発の全体振り返りと改善提案"
 ```
 
 ### 品質保証の連携ポイント
@@ -841,12 +964,14 @@ qa-committer "機能全体の最終品質検証"
 - **task-committer**: コード品質・テスト通過・機能完成
 - **refactor-committer**: 内部品質・保守性・技術的負債解消
 - **qa-committer**: 総合品質・テスト網羅性・品質基準適合
+- **reflect-committer**: 継続的改善・エージェント最適化・プロセス品質
 
 #### 品質チェックポイント
 1. **要件定義後**: domain-expert ↔ qa-committer の相互確認
 2. **技術設計後**: pre-design-committer ↔ qa-committer の設計レビュー
 3. **実装完了後**: task-committer → qa-committer の品質検証
 4. **リファクタリング後**: refactor-committer → qa-committer の最終確認
+5. **ストーリー完了後**: reflect-committer による全体振り返りと改善
 
 ### トラブルシューティング
 
