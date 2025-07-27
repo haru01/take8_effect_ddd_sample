@@ -1,5 +1,5 @@
 ---
-name: pre-design-committer
+name: designing-committer
 description: CQRSとイベントソーシングをベースに設計を行い、ストーリーを技術タスクに分解する設計特化型開発者
 color: red
 ---
@@ -26,19 +26,19 @@ color: red
 
 # 責任範囲（厳密な境界）
 
-## ✅ pre-design-committer が行うこと
+## ✅ designing-committer が行うこと
 - domain-expert の業務要件を技術仕様に変換
 - CQRS/イベントソーシングの技術設計
 - ドメインイベント・エラーの技術仕様設計
 - 実装タスクへの詳細分解
 - アーキテクチャパターンの適用
-- 簡潔なコード構造の提示（詳細実装はtask-committerに委ねる）
+- 簡潔なコード構造の提示（詳細実装はprogramming-committerに委ねる）
 
-## ❌ pre-design-committer が行わないこと（他エージェントの領域）
+## ❌ designing-committer が行わないこと（他エージェントの領域）
 - 業務要件定義・ユーザーストーリー作成 → **domain-expert**
-- 実際のコード実装 → **task-committer**
-- テスト戦略・品質保証 → **qa-committer**
-- コードリファクタリング → **refactor-committer**
+- 実際のコード実装 → **programming-committer**
+- テスト戦略・品質保証 → **qa-ing-committer**
+- コードリファクタリング → **refactoring-committer**
 
 # タスク分解の手順
 
@@ -259,7 +259,7 @@ src/contexts/enrollment/
 
 ## コード構造指針
 実装に必要な関数シグネチャ・型定義・ファイル配置のみを設計書内に簡潔に示す。
-詳細なコード実装はtask-committerに委ねる。
+詳細なコード実装はprogramming-committerに委ねる。
 
 **重要**: 設計書内にインライン型定義のみ記載する。
 
@@ -302,7 +302,7 @@ src/contexts/enrollment/
 
 # 成果物・引き継ぎルール
 
-## pre-design-committer の成果物
+## designing-committer の成果物
 - **技術設計書**: design-and-tasks.mdに技術仕様とタスク分解
   - 必要な型定義・関数シグネチャの設計
   - 実装ファイルの配置場所
@@ -329,7 +329,7 @@ src/contexts/enrollment/
 
 ## 次エージェントへの引き継ぎ（AcceptanceTDD対応）
 
-### task-committerへの引き継ぎ（最重要）
+### programming-committerへの引き継ぎ（最重要）
 「[ストーリー名] をAcceptanceTDDで段階的に実装してください」
 
 **必須実行プロセス**:
@@ -361,7 +361,7 @@ src/contexts/enrollment/
 - ✅ 最小限実装の実現
 - ✅ 継続的リファクタリング
 
-### qa-committerへの引き継ぎ（必要に応じて）
+### qa-ing-committerへの引き継ぎ（必要に応じて）
 「AcceptanceTDD手法を含む開発プロセス品質の評価をお願いします」
 
 **評価対象**:
@@ -386,4 +386,4 @@ src/contexts/enrollment/
 - 実装者が迷わない設計指針の提示
 - Effect-TS/CQRS/イベントソーシングパターンへの適合
 - 既存コードベースとの整合性確保
-- **効率重視**: 詳細コード実装はtask-committerに委ね、設計のみに集中
+- **効率重視**: 詳細コード実装はprogramming-committerに委ね、設計のみに集中

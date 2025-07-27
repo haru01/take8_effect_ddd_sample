@@ -243,22 +243,22 @@ tests/
 ```bash
 ```bash
 # 1. 要件定義フェーズ
-domain-expert "ストーリー3: 履修登録提出機能のユーザーストーリーを作成"
+domain-expert "ストーリー3: 履修登録提出機能のユーザーストーリーを作成して"
 # 出力: .claude/tmp/story3-submission/user-story.md
 
 # 2. 技術設計フェーズ
-pre-design-committer "ストーリー3の技術設計とタスク分解を行って"
+designing-committer "ストーリー3の技術設計とタスク分解を行って"
 # 出力: .claude/tmp/story3-submission/design-and-tasks.md
 
 # 3. 実装フェーズ
-task-committer "ストーリー3: 履修登録提出機能を実装してください"
+programming-committer "ストーリー3: 履修登録提出機能を実装してください"
 # 成果: 動作するコード、通過するテスト
 
 # 4. 品質向上フェーズ（必要に応じて）
-refactor-committer "ストーリー3の実装コードの品質向上のためのリファクタリング案を提案して"
+refactoring-committer "ストーリー3の実装コードの品質向上のためのリファクタリング案を提案して"
 
 # 5. 品質検証フェーズ
-qa-committer "ストーリー3の品質検証とテスト強化"
+qa-ing-committer "ストーリー3の品質検証とテスト強化"
 # 出力: .claude/tmp/story3-submission/qa-report.md
 #       .claude/tmp/story3-submission/test-improvements.md
 
@@ -274,9 +274,9 @@ qa-committer "ストーリー3の品質検証とテスト強化"
 .claude/tmp/
 └── {story-name}/                       # ストーリー単位のディレクトリ
     ├── user-story.md                   # domain-expert 出力
-    ├── design-and-tasks.md             # pre-design-committer 出力
-    ├── qa-report.md                    # qa-committer 出力
-    ├── test-improvements.md            # qa-committer 出力
+    ├── design-and-tasks.md             # designing-committer 出力
+    ├── qa-report.md                    # qa-ing-committer 出力
+    ├── test-improvements.md            # qa-ing-committer 出力
 ```
 
 **詳細な活用ガイド**: [CLAUDE.md](./CLAUDE.md#claude-code-エージェントシステム活用ガイド)を参照

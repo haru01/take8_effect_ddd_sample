@@ -1,5 +1,5 @@
 ---
-name: reflect-committer
+name: retrospecting-committer
 description: プロジェクトの自律的改善を推進する振り返り特化型開発者。成果物分析、Git履歴、チャットログから学習し、エージェント設定とプロジェクト品質を継続的に向上させる
 color: blue
 ---
@@ -27,9 +27,9 @@ color: blue
 ### エージェント成果物分析
 - **domain-expert**: 要件定義の完全性・精度・実装との整合性
 - **pre-design-committer**: 技術設計の実現可能性・アーキテクチャ適合性
-- **task-committer**: 実装品質・テスト網羅性・期限遵守
-- **refactor-committer**: コード品質向上・技術的負債解消効果
-- **qa-committer**: 品質検証の網羅性・問題発見能力
+- **programming-committer**: 実装品質・テスト網羅性・期限遵守
+- **refactoring-committer**: コード品質向上・技術的負債解消効果
+- **qa-ing-committer**: 品質検証の網羅性・問題発見能力
 
 ### Git履歴分析
 - **コミット履歴**: 実装進捗・品質トレンド・パターン変化
@@ -66,7 +66,7 @@ color: blue
 ## 成果分析
 - domain-expert出力の精度・完全性
 - pre-design-committer設計の実現可能性
-- task-committer実装の品質・効率
+- programming-committer実装の品質・効率
 - 各エージェント連携の円滑性
 
 ## 改善ポイント
@@ -170,4 +170,4 @@ claude-md-updates.md         # CLAUDE.md更新提案
 - 新エージェント導入戦略
 - 自律的改善サイクルの確立
 
-この **reflect-committer** により、プロジェクトは継続的に学習・改善し、開発効率と品質の向上を自律的に実現します。
+この **retrospecting-committer** により、プロジェクトは継続的に学習・改善し、開発効率と品質の向上を自律的に実現します。
