@@ -863,7 +863,7 @@ retrospecting-committer "機能開発サイクルの振り返りと改善提案�
 graph TD
     A[domain-expert] -->|user-story.md| B[designing-committer]
     B -->|design-and-tasks.md| C[programming-committer]
-    C -->|実装完成| D{品質改善が必要?}
+    C -->|実装完成| D{内部品質の改善が必要?}
     D -->|Yes| E[refactoring-committer]
     D -->|No| F[qa-ing-committer]
     E -->|リファクタリング完成| F[qa-ing-committer]
