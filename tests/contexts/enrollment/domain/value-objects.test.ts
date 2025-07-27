@@ -6,6 +6,7 @@ import {
   RegistrationSessionId,
   CourseId 
 } from "../../../../src/contexts/enrollment/domain/models/shared/value-objects.js";
+import { InvalidRegistrationSessionId } from "../../../../src/contexts/enrollment/domain/errors/domain-errors.js";
 
 describe("値オブジェクトのバリデーション", () => {
   describe("StudentId", () => {
@@ -90,7 +91,9 @@ describe("値オブジェクトのバリデーション", () => {
         const invalidStudentId = StudentId.make("INVALID");
         const validTerm = Term.make("2024-Spring");
         const error = yield* RegistrationSessionId.create(invalidStudentId, validTerm).pipe(Effect.flip);
-        expect(error.message).toContain("セッションIDは'S12345678:YYYY-Season'形式である必要があります");
+        expect((error as InvalidRegistrationSessionId)._tag).toBe("InvalidRegistrationSessionId");
+        expect((error as InvalidRegistrationSessionId).studentId).toBe("INVALID");
+        expect((error as InvalidRegistrationSessionId).term).toBe("2024-Spring");
       }).pipe(Effect.runPromise)
     );
 
@@ -99,7 +102,9 @@ describe("値オブジェクトのバリデーション", () => {
         const validStudentId = StudentId.make("S12345678");
         const invalidTerm = Term.make("INVALID-TERM");
         const error = yield* RegistrationSessionId.create(validStudentId, invalidTerm).pipe(Effect.flip);
-        expect(error.message).toContain("セッションIDは'S12345678:YYYY-Season'形式である必要があります");
+        expect((error as InvalidRegistrationSessionId)._tag).toBe("InvalidRegistrationSessionId");
+        expect((error as InvalidRegistrationSessionId).studentId).toBe("S12345678");
+        expect((error as InvalidRegistrationSessionId).term).toBe("INVALID-TERM");
       }).pipe(Effect.runPromise)
     );
 
@@ -108,7 +113,9 @@ describe("値オブジェクトのバリデーション", () => {
         const invalidStudentId = StudentId.make("WRONG");
         const invalidTerm = Term.make("BAD-FORMAT");
         const error = yield* RegistrationSessionId.create(invalidStudentId, invalidTerm).pipe(Effect.flip);
-        expect(error.message).toContain("セッションIDは'S12345678:YYYY-Season'形式である必要があります");
+        expect((error as InvalidRegistrationSessionId)._tag).toBe("InvalidRegistrationSessionId");
+        expect((error as InvalidRegistrationSessionId).studentId).toBe("WRONG");
+        expect((error as InvalidRegistrationSessionId).term).toBe("BAD-FORMAT");
       }).pipe(Effect.runPromise)
     );
 
@@ -117,7 +124,9 @@ describe("値オブジェクトのバリデーション", () => {
         const colonStudentId = StudentId.make("S12345:78");
         const validTerm = Term.make("2024-Spring");
         const error = yield* RegistrationSessionId.create(colonStudentId, validTerm).pipe(Effect.flip);
-        expect(error.message).toContain("セッションIDは'S12345678:YYYY-Season'形式である必要があります");
+        expect((error as InvalidRegistrationSessionId)._tag).toBe("InvalidRegistrationSessionId");
+        expect((error as InvalidRegistrationSessionId).studentId).toBe("S12345:78");
+        expect((error as InvalidRegistrationSessionId).term).toBe("2024-Spring");
       }).pipe(Effect.runPromise)
     );
 
@@ -126,7 +135,9 @@ describe("値オブジェクトのバリデーション", () => {
         const validStudentId = StudentId.make("S12345678");
         const colonTerm = Term.make("2024:Spring");
         const error = yield* RegistrationSessionId.create(validStudentId, colonTerm).pipe(Effect.flip);
-        expect(error.message).toContain("セッションIDは'S12345678:YYYY-Season'形式である必要があります");
+        expect((error as InvalidRegistrationSessionId)._tag).toBe("InvalidRegistrationSessionId");
+        expect((error as InvalidRegistrationSessionId).studentId).toBe("S12345678");
+        expect((error as InvalidRegistrationSessionId).term).toBe("2024:Spring");
       }).pipe(Effect.runPromise)
     );
 

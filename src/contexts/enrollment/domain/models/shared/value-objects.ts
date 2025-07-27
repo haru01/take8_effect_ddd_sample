@@ -1,4 +1,5 @@
-import { Schema, Brand, Effect, ParseResult } from "effect";
+import { Schema, Brand, Effect } from "effect";
+import { InvalidRegistrationSessionId } from "../../errors/domain-errors.js";
 
 // --- NonEmptyString ---
 export type NonEmptyString = string & Brand.Brand<"NonEmptyString">;
@@ -77,9 +78,17 @@ export const RegistrationSessionId = {
   decode: Schema.decode(RegistrationSessionIdSchema),
   encode: Schema.encode(RegistrationSessionIdSchema),
   make: (value: string): RegistrationSessionId => value as RegistrationSessionId,
-  create: (studentId: StudentId, term: Term): Effect.Effect<RegistrationSessionId, ParseResult.ParseError> => {
+  create: (studentId: StudentId, term: Term): Effect.Effect<RegistrationSessionId, InvalidRegistrationSessionId> => {
     const composite = `${studentId}:${term}`;
-    return Schema.decode(RegistrationSessionIdSchema)(composite);
+    return Schema.decode(RegistrationSessionIdSchema)(composite).pipe(
+      Effect.mapError((_parseError) => {
+        return new InvalidRegistrationSessionId({
+          studentId,
+          term,
+          reason: "セッションIDの形式が正しくありません (学生IDまたは学期の形式エラー)"
+        });
+      })
+    );
   },
   parse: (sessionId: RegistrationSessionId): { studentId: StudentId; term: Term } => {
     const [studentId, term] = sessionId.split(':');

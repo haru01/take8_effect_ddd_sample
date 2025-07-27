@@ -1,9 +1,9 @@
 import { Effect } from "effect";
 import { StudentId, Term, RegistrationSessionId } from "../../domain/models/shared/value-objects.js";
-import { SessionAlreadyExists } from "../../domain/errors/domain-errors.js";
+import { SessionAlreadyExists, InvalidRegistrationSessionId } from "../../domain/errors/domain-errors.js";
 import { createRegistrationSession as createRegistrationSessionEvent } from "../../domain/models/registration-session/registration-session.js";
 import { RegistrationSessionRepository } from "../../domain/repositories/registration-session-repository.js";
-import { EventStore } from "../../../shared/kernel/types/event-store.js";
+import { EventStore, EventStoreError } from "../../../shared/kernel/types/event-store.js";
 import { EventBus } from "../../../shared/kernel/types/event-bus.js";
 
 export interface CreateRegistrationSessionCommand {
@@ -33,11 +33,18 @@ const ensureNotExists = (sessionId: RegistrationSessionId) =>
  * 履修登録セッションを作成するコマンド
  * @param command - 作成するセッションの情報
  * @returns - 作成されたセッションのID
+ * @throws - セッションが既に存在する場合
+ * @throws - セッションIDのパースエラーが発生した場合
+ * @throws - イベントストアのエラーが発生した場合
  * @remark この関数は、セッションの状態を変更するのではなく、ドメインイベントを生成して保存・パブリッシュします。
  */
 export const createRegistrationSession = (
   command: CreateRegistrationSessionCommand
-) =>
+): Effect.Effect<
+  RegistrationSessionId,
+  SessionAlreadyExists | InvalidRegistrationSessionId | EventStoreError,
+  RegistrationSessionRepository | EventStore | EventBus
+> =>
   Effect.gen(function* () {
     const eventStore = yield* EventStore;
     const eventBus = yield* EventBus;

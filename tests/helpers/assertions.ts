@@ -4,7 +4,7 @@ import { RegistrationSession, CourseInfo } from "../../src/contexts/enrollment/d
 import { RegistrationSessionRepository } from "../../src/contexts/enrollment/domain/repositories/registration-session-repository.js";
 import { RegistrationSessionId, StudentId, Term, CourseId } from "../../src/contexts/enrollment/domain/models/shared/value-objects.js";
 import { DomainEvent } from "../../src/contexts/enrollment/domain/events/registration-session-events.js";
-import { MaxUnitsExceeded, DuplicateCourseInSession, SessionNotFound } from "../../src/contexts/enrollment/domain/errors/domain-errors.js";
+import { MaxUnitsExceeded, DuplicateCourseInSession, SessionNotFound, InvalidRegistrationSessionId } from "../../src/contexts/enrollment/domain/errors/domain-errors.js";
 
 // セッション作成アサーション用のヘルパー型
 export interface SessionCreationAssertion {
@@ -150,10 +150,18 @@ export const assertSessionInDraftState = (session: RegistrationSession) => {
   }
 };
 
-// バリデーションエラーのアサーション
+// バリデーションエラーのアサーション（後方互換性のため残す）
 export const assertValidationError = (error: any, expectedMessage: string) => {
   expect(error).toBeDefined();
   expect(error.message).toContain(expectedMessage);
+};
+
+// 型安全なドメインエラーアサーション関数
+export const assertInvalidRegistrationSessionIdError = (error: InvalidRegistrationSessionId, expectedStudentId: string, expectedTerm: string) => {
+  expect(error._tag).toBe("InvalidRegistrationSessionId");
+  expect(error.studentId).toBe(expectedStudentId);
+  expect(error.term).toBe(expectedTerm);
+  expect(error.reason).toContain("セッションIDの形式が正しくありません");
 };
 
 // --- 科目追加関連のアサーション ---
