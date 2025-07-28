@@ -551,32 +551,119 @@ graph LR
 
 #### Acceptance Testファイル標準構成
 
+**基本テンプレート**:
 ```typescript
-describe("Story X: [機能名]", () => {
-  // Phase 1: 基本正常系（最初はこれのみ有効）
-  it("AC1: [最重要な正常系受け入れ条件]", () => {
-    return Effect.gen(function* () {
-      // Arrange: テストデータ準備
-      // Act: 機能実行
-      // Assert: 結果検証（カスタムアサーション使用）
-    }).pipe(Effect.provide(TestLayer), Effect.runPromise);
+import { describe, it } from "vitest";
+import { Effect, Layer, Ref } from "effect";
+import { createRegistrationSession } from "../../src/contexts/enrollment/application/commands/create-registration-session.js";
+import { StudentId, Term } from "../../src/contexts/enrollment/domain/models/shared/value-objects.js";
+import { InMemoryEventStore } from "../../src/contexts/shared/infrastructure/event-store/in-memory-event-store.js";
+import { InMemoryRegistrationSessionRepository } from "../../src/contexts/enrollment/infrastructure/persistence/in-memory-registration-session-repository.js";
+import { InMemoryEventBus } from "../../src/contexts/shared/infrastructure/event-bus/in-memory-event-bus.js";
+import { EventBus } from "../../src/contexts/shared/kernel/types/event-bus.js";
+import { DomainEvent } from "../../src/contexts/enrollment/domain/events/registration-session-events.js";
+import {
+  thenSessionIdFormatIsValid,
+  thenRegistrationSessionCreatedEventIsPublished,
+  thenRegistrationSessionCanBeRetrieved,
+  // 他のカスタムアサーション
+} from "../helpers/assertions.js";
+
+// === Given（前提条件）ヘルパー関数 ===
+const givenValidStudentAndTerm = () =>
+  Effect.gen(function* () {
+    const studentId = StudentId.make("S12345678"); // 田中太郎の学生ID
+    const term = Term.make("2024-Spring");          // 2024年春学期
+    return { studentId, term };
   });
 
-  // Phase 2以降: 最初は全てskip状態で実装
-  it.skip("AC2: [重要異常系1]", () => {
-    return Effect.gen(function* () {
-      // エラーケースの実装
-      const error = yield* command.pipe(Effect.flip);
-      assertSpecificError(error, expectedParams);
-    }).pipe(Effect.provide(TestLayer), Effect.runPromise);
+const givenEventCapture = () =>
+  Effect.gen(function* () {
+    const capturedEvents = yield* Ref.make<DomainEvent[]>([]);
+    const eventBus = yield* EventBus;
+    yield* eventBus.subscribe((event) =>
+      Ref.update(capturedEvents, (events) => [...events, event])
+    );
+    return capturedEvents;
   });
 
-  it.skip("AC3: [重要異常系2]", () => { ... });
-  it.skip("AC4: [境界値1]", () => { ... });
-  it.skip("AC5: [境界値2]", () => { ... });
-  it.skip("エッジケース1: [特殊ケース1]", () => { ... });
+describe("ストーリーX: [機能名]", () => {
+  // TestLayer構成（標準パターン）
+  const TestLayer = Layer.mergeAll(
+    InMemoryEventStore,
+    InMemoryEventBus,
+    InMemoryRegistrationSessionRepository.pipe(
+      Layer.provide(Layer.mergeAll(InMemoryEventStore, InMemoryEventBus))
+    )
+  );
+
+  describe("基本シナリオ", () => {
+    // Phase 1: 基本正常系（最初はこれのみ有効）
+    it("AC1: [最重要な正常系受け入れ条件]", () =>
+      Effect.gen(function* () {
+        // Given: 前提条件の設定（日本語コメント推奨）
+        const { studentId, term } = yield* givenValidStudentAndTerm();
+        const capturedEvents = yield* givenEventCapture();
+
+        // When: 機能実行（実際のビジネスアクション）
+        const sessionId = yield* createRegistrationSession({ studentId, term });
+
+        // Then: 結果検証（カスタムアサーション活用）
+        thenSessionIdFormatIsValid(sessionId);
+        yield* thenRegistrationSessionCreatedEventIsPublished(capturedEvents, sessionId, studentId, term);
+        yield* thenRegistrationSessionCanBeRetrieved(sessionId, studentId, term);
+      })
+        .pipe(Effect.provide(TestLayer))
+        .pipe(Effect.runPromise)
+    );
+  });
+
+  describe("異常系シナリオ", () => {
+    // Phase 2: 主要異常系（最初は全てskip状態で実装）
+    it.skip("AC2: [重要異常系1の説明]", () =>
+      Effect.gen(function* () {
+        // Given: エラーが発生する前提条件
+        const { studentId, term } = yield* givenValidStudentAndTerm();
+        
+        // When: エラーが期待される操作（Effect.flip使用）
+        const error = yield* createRegistrationSession({ studentId, term }).pipe(
+          Effect.flip // 失敗をSuccessに変換
+        );
+
+        // Then: エラーの詳細検証
+        assertSpecificError(error, expectedParams);
+      })
+        .pipe(Effect.provide(TestLayer))
+        .pipe(Effect.runPromise)
+    );
+
+    it.skip("AC3: [重要異常系2の説明]", () => {
+      // 同様のパターンで実装
+    });
+  });
+
+  describe("境界値・エッジケース", () => {
+    it.skip("AC4: [境界値1の説明]", () => {
+      // 境界値テストの実装
+    });
+
+    it.skip("AC5: [境界値2の説明]", () => {
+      // 境界値テストの実装
+    });
+  });
 });
 ```
+
+**テスト命名規則**:
+- **ストーリー名**: 日本語でビジネス機能を表現（例：「履修登録セッション開始」）
+- **受け入れ条件**: 「AC1:」「AC2:」プレフィックス + ビジネス価値の説明
+- **テストケース名**: ユーザー視点での具体的な動作説明
+- **describe構造**: 「基本シナリオ」「異常系シナリオ」「境界値・エッジケース」で分類
+
+**Given-When-Thenヘルパー関数命名規則**:
+- **Given**: `given[Context]()` - 前提条件設定（例：`givenValidStudentAndTerm()`）
+- **When**: 直接コマンド実行（例：`createRegistrationSession({ studentId, term })`）
+- **Then**: `then[ExpectedResult]()` - カスタムアサーション（例：`thenSessionIdFormatIsValid()`）
 
 #### 実装進行管理
 - **段階的テスト有効化**: `it.skip()` を `it()` に1つずつ変更
@@ -598,12 +685,94 @@ describe("Story X: [機能名]", () => {
 5. **テスト進行管理**: `it.skip()` から `it()` への段階的変更記録
 6. **フェーズ別コミット**: Phase毎の独立したコミットによる進捗管理
 
+### テスト品質基準（必須遵守）
+
+#### Effect.flipパターンによる失敗テスト
+```typescript
+// ✅ 標準的な失敗テストパターン
+it("AC2: 同一学生・学期での重複セッション作成を防止する", () =>
+  Effect.gen(function* () {
+    // Given: 既存セッションが存在する状況
+    const { studentId, term } = yield* givenValidStudentAndTerm();
+    const firstSessionId = yield* createRegistrationSession({ studentId, term });
+
+    // When: 同じ条件で再度セッション作成を試行（失敗が期待される）
+    const error = yield* createRegistrationSession({ studentId, term }).pipe(
+      Effect.flip // 失敗をSuccessに変換して捕捉
+    );
+
+    // Then: 期待されるエラーの詳細検証
+    thenDuplicateSessionErrorOccurs(error, firstSessionId);
+  })
+    .pipe(Effect.provide(TestLayer))
+    .pipe(Effect.runPromise)
+);
+
+// ❌ 悪い例: try-catchやPromise.rejectの使用
+try {
+  await createRegistrationSession({ studentId, term });
+  expect.fail("Should have thrown error");
+} catch (error) {
+  // Effect-TSの型安全性を損なう
+}
+```
+
+#### TestLayer構成の標準パターン
+```typescript
+// ✅ 標準的なTestLayer構成
+const TestLayer = Layer.mergeAll(
+  InMemoryEventStore,                    // イベントストア
+  InMemoryEventBus,                      // イベントバス
+  InMemoryRegistrationSessionRepository.pipe(  // リポジトリ
+    Layer.provide(Layer.mergeAll(InMemoryEventStore, InMemoryEventBus))
+  )
+);
+
+// インメモリ実装による高速テスト実行
+// 実際のDB/外部サービスへの依存を排除
+// Effect-TSのLayer合成による依存性注入
+```
+
+#### カスタムアサーション活用の必須パターン
+```typescript
+// ✅ カスタムアサーション使用（推奨）
+yield* thenRegistrationSessionCreatedEventIsPublished(
+  capturedEvents, sessionId, studentId, term
+);
+yield* thenRegistrationSessionCanBeRetrieved(sessionId, studentId, term);
+
+// ❌ 直接アサーション（非推奨）
+const events = yield* Ref.get(capturedEvents);
+expect(events).toHaveLength(1);
+expect(events[0]._tag).toBe("RegistrationSessionCreated");
+// 詳細検証が冗長になり、再利用性が低い
+```
+
+#### 日本語テスト名の命名基準
+```typescript
+// ✅ 良い例: ビジネス価値を表現する日本語名
+describe("ストーリー1: 履修登録セッション開始", () => {
+  it("学生が新学期の履修計画を開始する", () => { ... });
+  it("同一学生・学期での重複セッション作成を防止する", () => { ... });
+  it("複数学生の並行履修計画をサポートする", () => { ... });
+});
+
+// ❌ 悪い例: 技術的詳細に焦点を当てた命名
+describe("RegistrationSession", () => {
+  it("should create session with valid input", () => { ... });
+  it("should throw error on duplicate", () => { ... });
+});
+```
+
 ### テスト規約（プロトタイプフェーズ）
 1. **AcceptanceTDD優先**: 段階的受け入れテスト実装最優先
-2. **カスタムアサーション**: 複雑な検証ロジックは再利用可能な関数化
-3. **統合テスト保留**: プロトタイプフェーズでは受け入れテストで代替
-4. **90%+カバレッジ**: 品質基準の維持必須
-5. **ROI重視**: 投資対効果を考慮したテスト実装判断
+2. **カスタムアサーション必須**: 複雑な検証ロジックは再利用可能な関数化
+3. **Effect.flip活用**: 失敗テストは必ずEffect.flipパターンを使用
+4. **日本語命名**: テスト名は日本語でビジネス価値を表現
+5. **TestLayer統一**: 標準的なLayer構成パターンを使用
+6. **統合テスト保留**: プロトタイプフェーズでは受け入れテストで代替
+7. **90%+カバレッジ**: 品質基準の維持必須
+8. **ROI重視**: 投資対効果を考慮したテスト実装判断
 
 ### アーキテクチャパターン
 
