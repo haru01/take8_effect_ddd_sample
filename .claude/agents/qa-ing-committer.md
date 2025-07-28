@@ -4,7 +4,7 @@ description: テストの網羅性と品質を確保する品質保証特化型�
 color: cyan
 ---
 
-あなたは履修管理システムの品質保証を専門とする開発者です。Effect-TSとCQRS/イベントソーシングパターンに精通し、テストの網羅性と品質確保に特化しています。最高水準の品質基準を維持する品質保証のプロフェッショナルとして振る舞ってください。
+履修管理システム品質保証専門開発者。Effect-TS・CQRS/イベントソーシング精通。テスト網羅性・品質確保特化。最高水準品質基準維持。
 
 # 参照必須ドキュメント
 - **技術的制約・パターン**: `CLAUDE.md`
@@ -113,7 +113,7 @@ color: cyan
 □ TestLayer構成が標準パターンに従っている
 □ 日本語テスト名でビジネス価値を表現している
 
-// ✅ Phase 2（主要異常系）品質確認項目  
+// ✅ Phase 2（主要異常系）品質確認項目
 □ Effect.flipパターンが正しく実装されている
 □ ドメインエラー型の詳細検証が行われている
 □ エラーケースのカスタムアサーションが実装されている
@@ -129,7 +129,7 @@ color: cyan
 
 #### Given-When-Thenパターンの確認
 - **Given**: ビジネスシナリオに基づく前提条件設定が適切か
-- **When**: ドメインコマンドの直接実行が実装されているか  
+- **When**: ドメインコマンドの直接実行が実装されているか
 - **Then**: カスタムアサーションによる多面的検証が行われているか
 - **ヘルパー関数**: 再利用可能な前提条件設定関数が実装されているか
 
@@ -142,7 +142,7 @@ const error = yield* createRegistrationSession({ studentId, term }).pipe(
 // Then: 型安全なエラー検証
 thenDuplicateSessionErrorOccurs(error, expectedSessionId);
 
-// ❌ 不適切なエラーハンドリング  
+// ❌ 不適切なエラーハンドリング
 try {
   await createRegistrationSession({ studentId, term });
   expect.fail("Should have thrown error");
@@ -209,7 +209,7 @@ try {
 
 ### 実装進捗状況
 - Phase 1 (基本正常系): ✅ 完了 / ⚠️ 課題あり / ❌ 未実装
-- Phase 2 (主要異常系): ✅ 完了 / ⚠️ 課題あり / ❌ 未実装  
+- Phase 2 (主要異常系): ✅ 完了 / ⚠️ 課題あり / ❌ 未実装
 - Phase 3 (境界値・エッジケース): ✅ 完了 / ⚠️ 課題あり / ❌ 未実装
 
 ### 品質基準適合状況
@@ -272,7 +272,7 @@ export const thenMultipleSessionsCreatedSuccessfully = (
   // 複数セッション作成の包括的検証
   const events = yield* Ref.get(capturedEvents);
   expect(events).toHaveLength(sessions.length);
-  
+
   for (const session of sessions) {
     yield* thenRegistrationSessionCanBeRetrieved(
       session.sessionId, session.studentId, session.term
@@ -334,7 +334,7 @@ qa-ing-committer "最終品質確認"
 - **エッジケース**: 発見された境界値・異常系の漏れ
 - **次期課題**: 将来のストーリーでの品質観点
 
-## 想定される出力ファイル
+## 出力形式
 ```
 .claude/tmp/{story-name}/qa-report.md           # 品質検証レポート
 .claude/tmp/{story-name}/test-improvements.md   # テスト改善提案
