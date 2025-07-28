@@ -60,7 +60,7 @@ const givenSessionWithExistingCourses = () =>
       { courseId: CourseId.make("C123456"), units: 3 }
     ];
     yield* addCoursesToSession({ sessionId, courses: existingCourses });
-    return { studentId, term, sessionId, existingCourses };
+    return { studentId, term, sessionId };
   });
 
 // Given: 重複科目を含む科目情報
@@ -139,7 +139,7 @@ describe("ストーリー2: 科目一括追加", () => {
     it("重複科目で単位重複取得を防止する", () =>
       Effect.gen(function* () {
         // === Given: 履修登録セッションに既に科目が追加されており、重複する科目を含む科目群が準備されている ===
-        const { sessionId, existingCourses } = yield* givenSessionWithExistingCourses();
+        const { sessionId } = yield* givenSessionWithExistingCourses();
         const duplicateCourses = givenCoursesWithDuplicates();
 
         // === When: 既存科目と重複する科目を履修登録セッションに追加しようとする ===

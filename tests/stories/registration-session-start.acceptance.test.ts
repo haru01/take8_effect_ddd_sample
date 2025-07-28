@@ -2,7 +2,7 @@ import { describe, it } from "vitest";
 import { Effect, Layer, Ref } from "effect";
 import { createRegistrationSession } from "../../src/contexts/enrollment/application/commands/create-registration-session.js";
 import { StudentId, Term } from "../../src/contexts/enrollment/domain/models/shared/value-objects.js";
-import { SessionAlreadyExists, InvalidRegistrationSessionId } from "../../src/contexts/enrollment/domain/errors/domain-errors.js";
+import { InvalidRegistrationSessionId } from "../../src/contexts/enrollment/domain/errors/domain-errors.js";
 import { InMemoryEventStore } from "../../src/contexts/shared/infrastructure/event-store/in-memory-event-store.js";
 import { InMemoryRegistrationSessionRepository } from "../../src/contexts/enrollment/infrastructure/persistence/in-memory-registration-session-repository.js";
 import { InMemoryEventBus } from "../../src/contexts/shared/infrastructure/event-bus/in-memory-event-bus.js";
@@ -51,21 +51,6 @@ const givenEventCapture = () =>
     return capturedEvents;
   });
 
-// Given: 不正な学生IDと有効な学期
-const givenInvalidStudentIdAndValidTerm = () =>
-  Effect.gen(function* () {
-    const invalidStudentId = StudentId.make("INVALID");
-    const validTerm = Term.make("2024-Spring");
-    return { invalidStudentId, validTerm };
-  });
-
-// Given: 有効な学生IDと不正な学期
-const givenValidStudentIdAndInvalidTerm = () =>
-  Effect.gen(function* () {
-    const validStudentId = StudentId.make("S12345678");
-    const invalidTerm = Term.make("BAD-TERM");
-    return { validStudentId, invalidTerm };
-  });
 
 describe("ストーリー1: 履修登録セッション開始", () => {
   // EventStoreとEventBusを先に提供し、それを使ってRepositoryを構築し、全てをマージ
@@ -161,8 +146,7 @@ describe("ストーリー1: 履修登録セッション開始", () => {
     it("セッションが編集可能なDraft状態で作成される", () =>
       Effect.gen(function* () {
         // === Given: 有効な学生IDと学期が指定される ===
-        const studentId = StudentId.make("S12345678");
-        const term = Term.make("2024-Spring");
+        const { studentId, term } = yield* givenValidStudentAndTerm();
 
         // === When: 履修登録セッションを作成する ===
         const sessionId = yield* createRegistrationSession({ studentId, term });
