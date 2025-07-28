@@ -234,31 +234,233 @@ tests/
 - **データベース**: インメモリ → PostgreSQL
 - **CI/CD**: GitHub Actions (予定)
 
+## システムアーキテクチャ
+
+### レイヤー構成とCQRSパターン
+
+```mermaid
+graph TB
+    subgraph "プレゼンテーション層"
+        REST[REST API<br/>未実装]
+    end
+
+    subgraph "アプリケーション層"
+        subgraph "コマンド側"
+            CMD1[CreateRegistrationSession<br/>コマンドハンドラ]
+            CMD2[AddCoursesToSession<br/>コマンドハンドラ]
+        end
+        subgraph "クエリ側"
+            QRY1[GetSessionById<br/>クエリハンドラ<br/>未実装]
+            QRY2[ListSessions<br/>クエリハンドラ<br/>未実装]
+        end
+    end
+
+    subgraph "ドメイン層"
+        subgraph "集約"
+            AGG1[RegistrationSession]
+            AGG2[Enrollment<br/>未実装]
+        end
+        subgraph "ドメインイベント"
+            EVT1[SessionCreated]
+            EVT2[CoursesAdded]
+            EVT3[SessionSubmitted<br/>未実装]
+        end
+        subgraph "値オブジェクト"
+            VO1[StudentId]
+            VO2[Term]
+            VO3[CourseId]
+        end
+        subgraph "リポジトリインターフェース"
+            REPO[RegistrationSessionRepository]
+        end
+    end
+
+    subgraph "インフラストラクチャ層"
+        subgraph "永続化"
+            ES1[InMemoryEventStore]
+            ES2[PostgreSQL EventStore<br/>未実装]
+        end
+        subgraph "メッセージング"
+            EB1[InMemoryEventBus]
+            EB2[RabbitMQ EventBus<br/>未実装]
+        end
+        subgraph "リポジトリ実装"
+            REPOIMPL[InMemoryRegistrationSessionRepository<br/>イベントから再構築]
+        end
+    end
+
+    subgraph "共有カーネル層"
+        KERNEL1[EventStore Interface]
+        KERNEL2[EventBus Interface]
+        KERNEL3[Error Types]
+    end
+
+    REST --> CMD1
+    REST --> CMD2
+    REST --> QRY1
+    REST --> QRY2
+
+    CMD1 --> AGG1
+    CMD2 --> AGG1
+    CMD1 --> EVT1
+    CMD2 --> EVT2
+
+    AGG1 --> VO1
+    AGG1 --> VO2
+    AGG1 --> VO3
+
+    CMD1 --> REPO
+    CMD2 --> REPO
+    QRY1 --> REPO
+
+    REPO --> REPOIMPL
+    REPOIMPL --> ES1
+    CMD1 --> ES1
+    CMD2 --> ES1
+    CMD1 --> EB1
+    CMD2 --> EB1
+
+    ES1 --> KERNEL1
+    EB1 --> KERNEL2
+```
+
+### Effect-TSによるLayer構成
+
+```mermaid
+graph TB
+    subgraph "アプリケーション実行"
+        APP[Effect.runPromise<br/>program.pipe Effect.provide AppLayer]
+    end
+
+    subgraph "AppLayer"
+        LAYER[Layer.mergeAll]
+        STORE[InMemoryEventStore]
+        BUS[InMemoryEventBus]
+        REPOL[InMemoryRegistrationSessionRepository]
+    end
+
+    subgraph "Layer実装"
+        STOREL[Layer.succeed<br/>EventStore]
+        BUSL[Layer.succeed<br/>EventBus]
+        REPOLL[Layer.effect<br/>RegistrationSessionRepository]
+    end
+
+    subgraph "依存関係"
+        DEP1[EventStore Service]
+        DEP2[EventBus Service]
+    end
+
+    APP --> LAYER
+    LAYER --> STORE
+    LAYER --> BUS
+    LAYER --> REPOL
+
+    STORE --> STOREL
+    BUS --> BUSL
+    REPOL --> REPOLL
+
+    REPOLL --> DEP1
+    REPOLL --> DEP2
+
+    style APP fill:#f9f,stroke:#333,stroke-width:4px
+    style LAYER fill:#bbf,stroke:#333,stroke-width:2px
+```
+
+### CQRSイベントフロー
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant CommandHandler as コマンドハンドラ
+    participant Repository
+    participant EventStore
+    participant EventBus
+    participant Subscriber as サブスクライバ
+
+    Note over Client,Subscriber: コマンド処理フロー
+
+    Client->>CommandHandler: CreateRegistrationSessionCommand<br/>{studentId, term}
+    CommandHandler->>CommandHandler: セッションID生成
+    CommandHandler->>Repository: findById(sessionId)
+    Repository-->>CommandHandler: SessionNotFound
+    CommandHandler->>CommandHandler: ドメインイベント生成<br/>RegistrationSessionCreated
+
+    par イベント永続化
+        CommandHandler->>EventStore: appendEvent(sessionId, event)
+        EventStore-->>CommandHandler: 保存成功
+    and イベント発行
+        CommandHandler->>EventBus: publish(event)
+        EventBus->>Subscriber: 通知
+    end
+
+    CommandHandler-->>Client: sessionId返却
+
+    Note over Client,Subscriber: リポジトリでの集約再構築フロー
+
+    Client->>Repository: findById(sessionId)
+    Repository->>EventStore: getEvents(sessionId, "RegistrationSession")
+    EventStore-->>Repository: イベントリスト
+    Repository->>Repository: reconstructFromEvents<br/>1. SessionCreatedから初期状態生成<br/>2. 後続イベントを順次適用
+    Repository-->>Client: RegistrationSession<br/>(最新状態)
+```
+
+### Layer依存関係の詳細
+
+```mermaid
+graph LR
+    subgraph "テスト環境Layer構成"
+        TESTL[TestLayer]
+        TESTSTORE[InMemoryEventStore]
+        TESTBUS[InMemoryEventBus]
+        TESTREPO[InMemoryRegistrationSessionRepository]
+    end
+
+    subgraph "依存性の流れ"
+        TESTL --> TESTSTORE
+        TESTL --> TESTBUS
+        TESTL --> TESTREPO
+        TESTREPO -.依存.-> TESTSTORE
+        TESTREPO -.依存.-> TESTBUS
+    end
+
+    style TESTL fill:#9f9,stroke:#333,stroke-width:4px
+```
+
 ## Claude Code エージェント システム
 
 本プロジェクトでは開発効率化のため、特化型エージェントシステムを活用しています。
 
+### エージェントの役割と特徴
+
+| エージェント | 役割 | 主な成果物 | 使用タイミング |
+|------------|------|-----------|--------------|
+| **domain-expert** | ビジネス要件の整理とユーザーストーリー作成 | user-story.md | 新機能開発の最初 |
+| **designing-committer** | CQRS/ESに基づく技術設計とタスク分解 | design-and-tasks.md | ストーリー確定後 |
+| **programming-committer** | TDD実装とテスト通過までの開発 | 実装コード + テスト | 設計完了後 |
+| **refactoring-committer** | コード品質向上と技術的負債の解消 | リファクタリング提案 | 実装完了後 |
+| **qa-ing-committer** | 品質検証とテスト戦略の策定 | qa-report.md | 各モード完了後 |
+| **retrospecting-committer** | プロジェクト分析と継続的改善 | 改善提案 | マイルストーン達成時 |
+
 ### 基本的な使い方
 
 ```bash
-```bash
-# 1. 要件定義フェーズ
+# 1. 要件定義モード
 domain-expert "ストーリー3: 履修登録提出機能のユーザーストーリーを作成して"
 # 出力: .claude/tmp/story3-submission/user-story.md
 
-# 2. 技術設計フェーズ
+# 2. 技術設計モード
 designing-committer "ストーリー3の技術設計とタスク分解を行って"
 # 出力: .claude/tmp/story3-submission/design-and-tasks.md
 
-# 3. 実装フェーズ
-programming-committer "ストーリー3: 履修登録提出機能を実装してください"
+# 3. 実装モード
+programming-committer "ストーリー3: 履修登録提出機能を実装して"
 # 成果: 動作するコード、通過するテスト
 
-# 4. 品質向上フェーズ（必要に応じて）
+# 4. 内部品質向上モード（必要に応じて）
 refactoring-committer "ストーリー3の実装コードの品質向上のためのリファクタリング案を提案して"
 
-# 5. 品質検証フェーズ
-qa-ing-committer "ストーリー3の品質検証とテスト強化"
+# 5. 品質検証モード
+qa-ing-committer "ストーリー3の品質検証と改善案を提案して"
 # 出力: .claude/tmp/story3-submission/qa-report.md
 #       .claude/tmp/story3-submission/test-improvements.md
 
@@ -266,17 +468,137 @@ qa-ing-committer "ストーリー3の品質検証とテスト強化"
 あなたは今どのエージェントとして振る舞っていますか？ 他に選べるエージェントを紹介してください。
 ```
 
+### 段階的な使い方（実践例）
+
+#### Phase 1: 新機能の要件定義と設計
+
+```bash
+# Step 1: ドメインエキスパートでビジネス要件を整理
+/compact domain-expert ストーリー3の履修登録提出機能について、学生とアドバイザーの観点から詳細なユーザーストーリーを作成してください。受け入れ条件には最小単位数チェック（12単位）と状態遷移の制約を含めてください。
+
+# → 出力: .claude/tmp/story3-submission/user-story.md
+# 内容: AS A/I WANT TO/SO THAT形式のストーリー、詳細な受け入れ条件、ビジネスルール
+
+# Step 2: 設計者でCQRS/ESアーキテクチャに基づく技術設計
+/compact designing-committer user-story.mdを基に、既存のストーリー2の実装パターンを参考にして、履修登録提出機能の技術設計を行ってください。特にドメインイベント（RegistrationSessionSubmitted）とバリデーション関数の設計に注力してください。
+
+# → 出力: .claude/tmp/story3-submission/design-and-tasks.md
+# 内容: イベント設計、集約の状態遷移、バリデーションロジック、実装タスクリスト
+```
+
+#### Phase 2: TDD実装と品質確保
+
+```bash
+# Step 3: プログラマーで段階的なTDD実装
+/compact programming-committer design-and-tasks.mdのタスクリストに従って、履修登録提出機能を実装してください。まず失敗する受け入れテストから始めて、最小限の実装で通過させてください。
+/compact refactoring-committer 最小限のリファクタリング案を提案してください。特に以下の点に注意してください：
+1. ドメインイベントの発行とハンドリング
+2. バリデーション関数の実装
+3. カスタムアサーションの活用
+# → 成果:
+# - tests/stories/session-submission.acceptance.test.ts（受け入れテスト）
+# - src/contexts/enrollment/application/commands/submit-registration-session.ts
+# - ドメインイベントとバリデーション関数の実装
+# - 全テスト通過
+
+# Step 4: 実装レビューと品質チェック
+/compact qa-ing-committer ストーリー3の実装をレビューしてください。特に以下の観点で確認してください：
+1. 受け入れテストのカバレッジ（正常系・異常系・境界値）
+2. Effect.flipパターンの適切な使用
+3. カスタムアサーションの活用
+4. ドメインロジックの配置が適切か
+
+# → 出力: .claude/tmp/story3-submission/qa-report.md
+# 内容: テストカバレッジ分析、改善提案、潜在的な問題点
+```
+
+#### Phase 3: リファクタリングと最適化
+
+```bash
+# Step 5: リファクタリング提案と実施
+/compact refactoring-committer qa-report.mdの指摘事項を踏まえて、ストーリー3の実装をリファクタリングしてください。特に：
+1. 重複コードの抽出と共通化
+2. バリデーション関数の最適化
+3. テストコードの可読性向上
+
+# → 成果: クリーンで保守しやすいコード、改善されたテスト
+
+# Step 6: 統合テストと動作確認
+/compact programming-committer main.tsにストーリー3のデモシナリオを追加して、ストーリー1→2→3の統合動作を確認してください。最小単位数エラーのケースも含めてください。
+
+# → 成果: 統合動作の確認、エンドツーエンドのシナリオ実行
+```
+
+#### Phase 4: プロジェクト全体の振り返りと改善
+
+```bash
+# Step 7: マイルストーン振り返り
+/compact retrospecting-committer ストーリー1-3の実装を振り返って、以下の観点で分析してください：
+1. AcceptanceTDDアプローチの効果
+2. Effect-TSパターンの活用度
+3. 技術的負債の蓄積状況
+4. 次のストーリーへの改善提案
+
+# → 出力: プロジェクト分析レポート、CLAUDE.mdへの更新提案
+
+# Step 8: ドキュメント更新
+/compact programming-committer retrospecting-committerの提案に基づいて、CLAUDE.mdとREADME.mdを更新してください。学んだパターンや注意点を追加してください。
+```
+
+### 高度な使い方のヒント
+
+#### 1. エージェント間の連携
+```bash
+# 複数エージェントの成果物を参照した作業
+/compact designing-committer .claude/tmp/story3-submission/user-story.mdとqa-report.mdを参照して、指摘された問題を解決する設計改善案を提案してください。
+```
+
+#### 2. 過去の成果物を活用した学習
+```bash
+# 成功パターンの抽出と適用
+/compact retrospecting-committer .claude/tmp/配下のすべてのストーリーの成果物を分析して、共通の成功パターンと失敗パターンを抽出してください。
+```
+
+#### 3. 品質ゲートの設定
+```bash
+# 明確な完了条件での作業
+/compact programming-committer 以下の条件をすべて満たすまで実装を続けてください：
+- カバレッジ95%以上
+- TypeScriptエラー0
+- すべての受け入れテスト通過
+- カスタムアサーション使用率100%
+```
+
 ### エージェント成果物の管理
 
 各エージェントの成果物は、ストーリー名でグループ化して管理されます：
 
-```
+```text
 .claude/tmp/
-└── {story-name}/                       # ストーリー単位のディレクトリ
-    ├── user-story.md                   # domain-expert 出力
-    ├── design-and-tasks.md             # designing-committer 出力
-    ├── qa-report.md                    # qa-ing-committer 出力
-    ├── test-improvements.md            # qa-ing-committer 出力
+├── story1-session-start/               # ストーリー1の成果物
+│   ├── user-story.md                   # ビジネス要件
+│   ├── design-and-tasks.md             # 技術設計
+│   └── qa-report.md                    # 品質レポート
+│
+├── story2-course-addition/             # ストーリー2の成果物
+│   ├── user-story.md
+│   ├── design-and-tasks.md
+│   ├── qa-report.md
+│   └── refactoring-suggestions.md     # リファクタリング提案
+│
+└── story3-submission/                  # ストーリー3の成果物
+    ├── user-story.md
+    ├── design-and-tasks.md
+    ├── qa-report.md
+    ├── test-improvements.md            # テスト改善提案
+    └── integration-test-results.md     # 統合テスト結果
 ```
 
-**詳細な活用ガイド**: [CLAUDE.md](./CLAUDE.md#claude-code-エージェントシステム活用ガイド)を参照
+### エージェント選択のベストプラクティス
+
+1. **順序を守る**: domain-expert → designing → programming → qa-ing
+2. **成果物を活用**: 前のエージェントの出力を次のエージェントの入力に
+3. **反復的改善**: qa-ingの指摘 → refactoring → 再度qa-ing
+4. **定期的な振り返り**: 各ストーリー完了時にretrospecting-committer
+
+**詳細な活用ガイド**: [CLAUDE.md](./CLAUDE.md#エージェントシステム活用ガイド)を参照

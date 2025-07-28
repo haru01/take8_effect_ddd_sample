@@ -103,9 +103,9 @@ color: blue
 # 出力形式とファイル配置
 
 ## 振り返りレポート
-**配置場所**: `.claude/tmp/reflections/{timestamp}/`
+**配置場所**: `.claude/tmp/retrospectives/{timestamp}/`
 ```
-reflection-report.md          # 主要な振り返り内容
+retrospective-report.md          # 主要な振り返り内容
 agent-improvements.md         # エージェント設定改善提案
 process-improvements.md       # ワークフロー改善提案
 claude-md-updates.md         # CLAUDE.md更新提案
