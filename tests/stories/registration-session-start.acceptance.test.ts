@@ -15,8 +15,64 @@ import {
   assertEventCount,
   assertSessionInDraftState,
   assertSessionExistsInRepository,
-  assertInvalidRegistrationSessionIdError
+  assertInvalidRegistrationSessionIdError,
+  thenSessionIdFormatIsValid,
+  thenRegistrationSessionCreatedEventIsPublished,
+  thenRegistrationSessionCanBeRetrieved,
+  thenRegistrationSessionCreatedEventIsStoredInEventStore,
+  thenDuplicateSessionErrorOccurs,
+  thenExactlyNEventsArePublished,
+  thenMultipleSessionsAreCreatedSuccessfully,
+  thenSessionIsInDraftState,
+  thenInvalidSessionIdErrorOccurs
 } from "../helpers/assertions.js";
+
+// === テスト用ヘルパー関数 ===
+
+// Given: 有効な学生と学期の組み合わせ
+const givenValidStudentAndTerm = () =>
+  Effect.gen(function* () {
+    const studentId = StudentId.make("S12345678");
+    const term = Term.make("2024-Spring");
+    return { studentId, term };
+  });
+
+// Given: 複数の異なる学生と学期の組み合わせ
+const givenMultipleStudentsAndTerms = () =>
+  Effect.gen(function* () {
+    const student1Id = StudentId.make("S12345678");
+    const student2Id = StudentId.make("S87654321");
+    const springTerm = Term.make("2024-Spring");
+    const fallTerm = Term.make("2024-Fall");
+    return { student1Id, student2Id, springTerm, fallTerm };
+  });
+
+// Given: イベントキャプチャセットアップ
+const givenEventCapture = () =>
+  Effect.gen(function* () {
+    const capturedEvents = yield* Ref.make<DomainEvent[]>([]);
+    const eventBus = yield* EventBus;
+    yield* eventBus.subscribe((event) =>
+      Ref.update(capturedEvents, (events) => [...events, event])
+    );
+    return capturedEvents;
+  });
+
+// Given: 不正な学生IDと有効な学期
+const givenInvalidStudentIdAndValidTerm = () =>
+  Effect.gen(function* () {
+    const invalidStudentId = StudentId.make("INVALID");
+    const validTerm = Term.make("2024-Spring");
+    return { invalidStudentId, validTerm };
+  });
+
+// Given: 有効な学生IDと不正な学期
+const givenValidStudentIdAndInvalidTerm = () =>
+  Effect.gen(function* () {
+    const validStudentId = StudentId.make("S12345678");
+    const invalidTerm = Term.make("BAD-TERM");
+    return { validStudentId, invalidTerm };
+  });
 
 describe("受け入れテスト: 履修登録セッション開始", () => {
   // EventStoreとEventBusを先に提供し、それを使ってRepositoryを構築し、全てをマージ
@@ -31,29 +87,24 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
   describe("受け入れ条件", () => {
     it("学生IDと学期を指定してセッションを作成できる", () =>
       Effect.gen(function* () {
-        // Arrange
-        const studentId = StudentId.make("S12345678");
-        const term = Term.make("2024-Spring");
-        
-        // イベントキャプチャ用
-        const capturedEvents = yield* Ref.make<DomainEvent[]>([]);
-        const eventBus = yield* EventBus;
-        
-        // イベントハンドラを登録
-        yield* eventBus.subscribe((event) =>
-          Ref.update(capturedEvents, (events) => [...events, event])
-        );
+        // === Given: 履修登録セッションがまだ作成されていない 学生IDと学期が指定される ===
+        const { studentId, term } = yield* givenValidStudentAndTerm();
+        const capturedEvents = yield* givenEventCapture();
 
-        // Act
+        // === When: 学生がセッションを作成する ===
         const sessionId = yield* createRegistrationSession({ studentId, term });
 
-        // Assert - カスタムアサーションで包括的に検証
-        yield* assertSessionCreatedSuccessfully({
-          sessionId,
-          expectedStudentId: studentId,
-          expectedTerm: term,
-          capturedEvents
-        });
+        // === Then: セッションIDの形式が正しいこと ===
+        thenSessionIdFormatIsValid(sessionId);
+
+        // === And: RegistrationSessionCreatedがイベントストアに登録されていること ===
+        yield* thenRegistrationSessionCreatedEventIsStoredInEventStore(sessionId, studentId, term);
+
+        // === And: RegistrationSessionCreatedのイベントバスにて発行されていること ===
+        yield* thenRegistrationSessionCreatedEventIsPublished(capturedEvents, sessionId, studentId, term);
+
+        // === And: 該当の履修登録セッションが取得できること ===
+        yield* thenRegistrationSessionCanBeRetrieved(sessionId, studentId, term);
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
@@ -61,34 +112,23 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
 
     it("同じ学生・学期の重複セッション作成は失敗する", () =>
       Effect.gen(function* () {
-        // Arrange
-        const studentId = StudentId.make("S12345678");
-        const term = Term.make("2024-Spring");
-        
-        // イベントキャプチャ用
-        const capturedEvents = yield* Ref.make<DomainEvent[]>([]);
-        const eventBus = yield* EventBus;
-        
-        yield* eventBus.subscribe((event) =>
-          Ref.update(capturedEvents, (events) => [...events, event])
-        );
-
-        // Act - 最初のセッション作成（成功）
+        // === Given: 既に履修登録セッションが存在する学生・学期の組み合わせ ===
+        const { studentId, term } = yield* givenValidStudentAndTerm();
+        const capturedEvents = yield* givenEventCapture();
+        // 最初のセッションを作成
         const firstSessionId = yield* createRegistrationSession({ studentId, term });
-        
-        // Assert - 最初のセッションの作成を確認
-        yield* assertSessionExistsInRepository(firstSessionId, studentId, term);
+        yield* thenRegistrationSessionCanBeRetrieved(firstSessionId, studentId, term);
 
-        // Act - 同じ学生・学期で再度作成を試行（失敗）
+        // === When: 同じ学生・学期でセッション作成を再試行する ===
         const error = yield* createRegistrationSession({ studentId, term }).pipe(
           Effect.flip
         );
 
-        // Assert - 重複エラーの確認
-        assertDuplicateSessionError(error, firstSessionId);
-        
-        // Assert - イベントは最初の作成分のみ発行されていることを確認
-        yield* assertEventCount(capturedEvents, 1);
+        // === Then: 履修登録セッションの重複エラーが発生する ===
+        thenDuplicateSessionErrorOccurs(error, firstSessionId);
+
+        // === And: 最初のセッションのイベントのみが発行されている ===
+        yield* thenExactlyNEventsArePublished(capturedEvents, 1);
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
@@ -96,21 +136,11 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
 
     it("異なる学生または学期であれば複数セッションを作成できる", () =>
       Effect.gen(function* () {
-        // Arrange
-        const student1Id = StudentId.make("S12345678");
-        const student2Id = StudentId.make("S87654321");
-        const springTerm = Term.make("2024-Spring");
-        const fallTerm = Term.make("2024-Fall");
-        
-        // イベントキャプチャ用
-        const capturedEvents = yield* Ref.make<DomainEvent[]>([]);
-        const eventBus = yield* EventBus;
-        
-        yield* eventBus.subscribe((event) =>
-          Ref.update(capturedEvents, (events) => [...events, event])
-        );
+        // === Given: 異なる学生と学期の組み合わせが複数存在する ===
+        const { student1Id, student2Id, springTerm, fallTerm } = yield* givenMultipleStudentsAndTerms();
+        const capturedEvents = yield* givenEventCapture();
 
-        // Act - 複数セッション作成
+        // === When: 複数の異なる学生・学期の組み合わせでセッションを作成する ===
         const session1Id = yield* createRegistrationSession({
           studentId: student1Id,
           term: springTerm
@@ -124,8 +154,8 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
           term: fallTerm
         });
 
-        // Assert - 複数セッション作成の包括的な検証
-        yield* assertMultipleSessionsCreated([
+        // === Then: 全ての履修登録セッションが正常に作成される ===
+        yield* thenMultipleSessionsAreCreatedSuccessfully([
           { sessionId: session1Id, studentId: student1Id, term: springTerm },
           { sessionId: session2Id, studentId: student2Id, term: springTerm },
           { sessionId: session3Id, studentId: student1Id, term: fallTerm }
@@ -137,16 +167,18 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
 
     it("作成されたセッションはDraft状態である", () =>
       Effect.gen(function* () {
-        // Arrange
+        // === Given: 有効な学生IDと学期が指定される ===
         const studentId = StudentId.make("S12345678");
         const term = Term.make("2024-Spring");
 
-        // Act
+        // === When: 履修登録セッションを作成する ===
         const sessionId = yield* createRegistrationSession({ studentId, term });
 
-        // Assert - リポジトリから取得してDraft状態を確認
-        const session = yield* assertSessionExistsInRepository(sessionId, studentId, term);
-        assertSessionInDraftState(session);
+        // === Then: セッションがDraft状態で作成される ===
+        const session = yield* thenRegistrationSessionCanBeRetrieved(sessionId, studentId, term);
+
+        // === And: 履修登録セッションが編集可能なDraft状態である ===
+        thenSessionIsInDraftState(session);
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
@@ -156,18 +188,17 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
   describe("エラーケース (E2E)", () => {
     it("不正な学生IDでコマンド実行は失敗する", () =>
       Effect.gen(function* () {
-        // Arrange - 不正な学生IDと有効な学期（E2Eテスト: コマンド層からの完全な処理）
-        const invalidStudentId = StudentId.make("INVALID");
-        const validTerm = Term.make("2024-Spring");
+        // === Given: 不正な形式の学生IDと有効な学期が指定される ===
+        const { invalidStudentId, validTerm } = yield* givenInvalidStudentIdAndValidTerm();
 
-        // Act & Assert - createRegistrationSession コマンドがアーキテクチャ全体を通じて失敗することを確認
-        const commandError = yield* createRegistrationSession({ 
-          studentId: invalidStudentId, 
-          term: validTerm 
+        // === When: 不正な学生IDで履修登録セッション作成を試行する ===
+        const commandError = yield* createRegistrationSession({
+          studentId: invalidStudentId,
+          term: validTerm
         }).pipe(Effect.flip);
 
-        // Assert - 複合キー生成時のバリデーションエラーがコマンド層まで伝播することを確認
-        assertInvalidRegistrationSessionIdError(commandError as InvalidRegistrationSessionId, "INVALID", "2024-Spring");
+        // === Then: 学生IDの形式エラーが発生すること ===
+        thenInvalidSessionIdErrorOccurs(commandError as InvalidRegistrationSessionId, "INVALID", "2024-Spring");
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
@@ -175,18 +206,17 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
 
     it("不正な学期でコマンド実行は失敗する", () =>
       Effect.gen(function* () {
-        // Arrange - 有効な学生IDと不正な学期（E2Eテスト）
-        const validStudentId = StudentId.make("S12345678");
-        const invalidTerm = Term.make("BAD-TERM");
+        // === Given: 有効な学生IDと不正な形式の学期が指定される ===
+        const { validStudentId, invalidTerm } = yield* givenValidStudentIdAndInvalidTerm();
 
-        // Act & Assert - createRegistrationSession コマンドがアーキテクチャ全体を通じて失敗することを確認
-        const commandError = yield* createRegistrationSession({ 
-          studentId: validStudentId, 
-          term: invalidTerm 
+        // === When: 不正な学期で履修登録セッション作成を試行する ===
+        const commandError = yield* createRegistrationSession({
+          studentId: validStudentId,
+          term: invalidTerm
         }).pipe(Effect.flip);
 
-        // Assert - 複合キー生成時のバリデーションエラーがコマンド層まで伝播することを確認
-        assertInvalidRegistrationSessionIdError(commandError as InvalidRegistrationSessionId, "S12345678", "BAD-TERM");
+        // === Then: 学期の形式エラーが発生すること ===
+        thenInvalidSessionIdErrorOccurs(commandError as InvalidRegistrationSessionId, "S12345678", "BAD-TERM");
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
