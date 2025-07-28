@@ -116,45 +116,133 @@ color: red
    - 全受け入れ条件の最終確認
    - システム全体の統合動作確認
 
-## Acceptance Testファイル構成指針
+## テスト設計・実装テンプレート
 
-### 標準テンプレート
+### 受け入れ条件からテストケースへの変換パターン
+
+**ビジネス要件 → 技術仕様変換例**:
 ```typescript
-describe("Story X: [機能名]", () => {
-  // Phase 1: 基本正常系（最初はこれのみ有効）
-  it("AC1: [最重要な正常系受け入れ条件]", () => {
-    // 最も重要なビジネス価値を提供する条件
-    // Effect.gen, assertions, etc.
+// domain-expertからの受け入れ条件
+/*
+ストーリー: 履修登録セッション開始
+AC1: 学生が新学期の履修計画を開始できる
+AC2: 同一学生・学期での重複登録を防止する  
+AC3: 複数学生の並行履修計画をサポートする
+AC4: 不正な学生IDでの登録を拒否する
+AC5: 不正な学期での登録を拒否する
+*/
+
+// ↓ designing-committerによる技術仕様設計 ↓
+
+import { describe, it } from "vitest";
+import { Effect, Layer, Ref } from "effect";
+import { createRegistrationSession } from "../../src/contexts/enrollment/application/commands/create-registration-session.js";
+// 必要なimport文の完全な設計...
+
+// === Given（前提条件）ヘルパー関数設計 ===
+const givenValidStudentAndTerm = () => Effect.gen(function* () {
+  const studentId = StudentId.make("S12345678"); // 田中太郎
+  const term = Term.make("2024-Spring");
+  return { studentId, term };
+});
+
+const givenEventCapture = () => Effect.gen(function* () {
+  const capturedEvents = yield* Ref.make<DomainEvent[]>([]);
+  const eventBus = yield* EventBus;
+  yield* eventBus.subscribe((event) =>
+    Ref.update(capturedEvents, (events) => [...events, event])
+  );
+  return capturedEvents;
+});
+
+describe("ストーリー1: 履修登録セッション開始", () => {
+  // TestLayer設計（Effect-TS依存性注入パターン）
+  const TestLayer = Layer.mergeAll(
+    InMemoryEventStore,
+    InMemoryEventBus,
+    InMemoryRegistrationSessionRepository.pipe(
+      Layer.provide(Layer.mergeAll(InMemoryEventStore, InMemoryEventBus))
+    )
+  );
+
+  describe("基本シナリオ", () => {
+    // Phase 1: 最重要正常系（最初に実装）
+    it("学生が新学期の履修計画を開始する", () =>
+      Effect.gen(function* () {
+        // Given: ビジネスシナリオの前提条件
+        const { studentId, term } = yield* givenValidStudentAndTerm();
+        const capturedEvents = yield* givenEventCapture();
+
+        // When: ドメインコマンドの実行
+        const sessionId = yield* createRegistrationSession({ studentId, term });
+
+        // Then: カスタムアサーションによる多面的検証
+        thenSessionIdFormatIsValid(sessionId);
+        yield* thenRegistrationSessionCreatedEventIsPublished(
+          capturedEvents, sessionId, studentId, term
+        );
+        yield* thenRegistrationSessionCanBeRetrieved(sessionId, studentId, term);
+      })
+        .pipe(Effect.provide(TestLayer))
+        .pipe(Effect.runPromise)
+    );
   });
 
-  // Phase 2: 主要異常系（最初は全てskip）
-  it.skip("AC2: [重要異常系1]", () => {
-    // 主要なエラーケース
-    // Effect.flip, エラーアサーション, etc.
+  describe("異常系シナリオ", () => {
+    // Phase 2: 重複防止エラー（Effect.flipパターン）
+    it.skip("同一学生・学期での重複セッション作成を防止する", () =>
+      Effect.gen(function* () {
+        // Given: 既存セッション存在の前提
+        const { studentId, term } = yield* givenValidStudentAndTerm();
+        const firstSessionId = yield* createRegistrationSession({ studentId, term });
+
+        // When: 失敗が期待される操作（Effect.flip使用）
+        const error = yield* createRegistrationSession({ studentId, term }).pipe(
+          Effect.flip // 失敗をSuccessに変換して型安全に捕捉
+        );
+
+        // Then: 特定エラー型の詳細検証
+        thenDuplicateSessionErrorOccurs(error, firstSessionId);
+      })
+        .pipe(Effect.provide(TestLayer))
+        .pipe(Effect.runPromise)
+    );
+
+    // Phase 2: バリデーションエラー系
+    it.skip("不正な学生IDでの履修計画開始を拒否する", () => {
+      // Brand型バリデーションエラーのテスト設計
+    });
+
+    it.skip("不正な学期での履修計画開始を拒否する", () => {
+      // Term型バリデーションエラーのテスト設計
+    });
   });
 
-  it.skip("AC3: [重要異常系2]", () => {
-    // 次に重要なエラーケース
-  });
-
-  // Phase 3: 境界値・エッジケース（最初は全てskip）
-  it.skip("AC4: [境界値1]", () => {
-    // 境界値テスト（最小値、最大値等）
-  });
-
-  it.skip("AC5: [境界値2]", () => {
-    // 境界値テスト
-  });
-
-  it.skip("エッジケース1: [特殊ケース1]", () => {
-    // エッジケース
-  });
-
-  it.skip("エッジケース2: [特殊ケース2]", () => {
-    // エッジケース
+  describe("複雑シナリオ", () => {
+    // Phase 3: 並行処理・複数データ検証
+    it.skip("複数学生の並行履修計画をサポートする", () => {
+      // 複数エンティティの整合性確認テスト設計
+    });
   });
 });
 ```
+
+### テスト設計における技術判断指針
+
+**フェーズ優先順位の決定基準**:
+1. **Phase 1**: 最小限の価値提供（MVPレベル）
+2. **Phase 2**: 堅牢性確保（エラーハンドリング）
+3. **Phase 3**: 完全性保証（境界値・エッジケース）
+
+**カスタムアサーション設計方針**:
+- **Then関数**: 1つの検証責務に集中
+- **命名規則**: `then[ExpectedOutcome]()`
+- **再利用性**: 複数テストで共有可能な設計
+
+**Effect.flipパターン適用判断**:
+- ドメインエラーが期待される全ケース
+- バリデーション失敗の確認
+- ビジネスルール違反の検証
 
 ### 実装進行の管理
 - **コメント記載**: 各フェーズの完了時にコミット
