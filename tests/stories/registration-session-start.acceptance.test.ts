@@ -9,13 +9,6 @@ import { InMemoryEventBus } from "../../src/contexts/shared/infrastructure/event
 import { EventBus } from "../../src/contexts/shared/kernel/types/event-bus.js";
 import { DomainEvent } from "../../src/contexts/enrollment/domain/events/registration-session-events.js";
 import {
-  assertSessionCreatedSuccessfully,
-  assertDuplicateSessionError,
-  assertMultipleSessionsCreated,
-  assertEventCount,
-  assertSessionInDraftState,
-  assertSessionExistsInRepository,
-  assertInvalidRegistrationSessionIdError,
   thenSessionIdFormatIsValid,
   thenRegistrationSessionCreatedEventIsPublished,
   thenRegistrationSessionCanBeRetrieved,
@@ -29,21 +22,21 @@ import {
 
 // === テスト用ヘルパー関数 ===
 
-// Given: 有効な学生と学期の組み合わせ
+// Given: 田中太郎（S12345678）が2024年春学期の履修登録を行う前提
 const givenValidStudentAndTerm = () =>
   Effect.gen(function* () {
-    const studentId = StudentId.make("S12345678");
-    const term = Term.make("2024-Spring");
+    const studentId = StudentId.make("S12345678"); // 田中太郎の学生ID
+    const term = Term.make("2024-Spring");          // 2024年春学期
     return { studentId, term };
   });
 
-// Given: 複数の異なる学生と学期の組み合わせ
+// Given: 複数学生の並行履修シナリオ（田中太郎・佐藤花子、春学期・秋学期）
 const givenMultipleStudentsAndTerms = () =>
   Effect.gen(function* () {
-    const student1Id = StudentId.make("S12345678");
-    const student2Id = StudentId.make("S87654321");
-    const springTerm = Term.make("2024-Spring");
-    const fallTerm = Term.make("2024-Fall");
+    const student1Id = StudentId.make("S12345678"); // 田中太郎の学生ID
+    const student2Id = StudentId.make("S87654321"); // 佐藤花子の学生ID
+    const springTerm = Term.make("2024-Spring");     // 2024年春学期
+    const fallTerm = Term.make("2024-Fall");         // 2024年秋学期
     return { student1Id, student2Id, springTerm, fallTerm };
   });
 
@@ -74,7 +67,7 @@ const givenValidStudentIdAndInvalidTerm = () =>
     return { validStudentId, invalidTerm };
   });
 
-describe("受け入れテスト: 履修登録セッション開始", () => {
+describe("ストーリー1: 履修登録セッション開始", () => {
   // EventStoreとEventBusを先に提供し、それを使ってRepositoryを構築し、全てをマージ
   const TestLayer = Layer.mergeAll(
     InMemoryEventStore,
@@ -84,33 +77,33 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
     )
   );
 
-  describe("受け入れ条件", () => {
-    it("学生IDと学期を指定してセッションを作成できる", () =>
+  describe("基本シナリオ", () => {
+    it("学生が新学期の履修計画を開始する", () =>
       Effect.gen(function* () {
-        // === Given: 履修登録セッションがまだ作成されていない 学生IDと学期が指定される ===
+        // Given: 学生（S12345678）が2024年春学期の履修登録を始めようとしている
         const { studentId, term } = yield* givenValidStudentAndTerm();
         const capturedEvents = yield* givenEventCapture();
 
-        // === When: 学生がセッションを作成する ===
+        // When: 学生が履修登録セッションを開始する
         const sessionId = yield* createRegistrationSession({ studentId, term });
 
-        // === Then: セッションIDの形式が正しいこと ===
+        // Then: 学生が識別可能なセッションIDが発行される
         thenSessionIdFormatIsValid(sessionId);
 
-        // === And: RegistrationSessionCreatedがイベントストアに登録されていること ===
+        // And: システムにセッション作成が永続記録される
         yield* thenRegistrationSessionCreatedEventIsStoredInEventStore(sessionId, studentId, term);
 
-        // === And: RegistrationSessionCreatedのイベントバスにて発行されていること ===
+        // And: 他システムにセッション作成が通知される
         yield* thenRegistrationSessionCreatedEventIsPublished(capturedEvents, sessionId, studentId, term);
 
-        // === And: 該当の履修登録セッションが取得できること ===
+        // And: 学生がセッションにアクセス可能になる
         yield* thenRegistrationSessionCanBeRetrieved(sessionId, studentId, term);
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
     );
 
-    it("同じ学生・学期の重複セッション作成は失敗する", () =>
+    it("同一学生・学期での重複セッション作成を防止する", () =>
       Effect.gen(function* () {
         // === Given: 既に履修登録セッションが存在する学生・学期の組み合わせ ===
         const { studentId, term } = yield* givenValidStudentAndTerm();
@@ -124,17 +117,17 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
           Effect.flip
         );
 
-        // === Then: 履修登録セッションの重複エラーが発生する ===
+        // === Then: セッション重複エラーが発生すること ===
         thenDuplicateSessionErrorOccurs(error, firstSessionId);
 
-        // === And: 最初のセッションのイベントのみが発行されている ===
+        // === And: 最初のセッション作成イベントのみがイベントバスに発行されること ===
         yield* thenExactlyNEventsArePublished(capturedEvents, 1);
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
     );
 
-    it("異なる学生または学期であれば複数セッションを作成できる", () =>
+    it("複数学生の並行履修計画をサポートする", () =>
       Effect.gen(function* () {
         // === Given: 異なる学生と学期の組み合わせが複数存在する ===
         const { student1Id, student2Id, springTerm, fallTerm } = yield* givenMultipleStudentsAndTerms();
@@ -154,7 +147,7 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
           term: fallTerm
         });
 
-        // === Then: 全ての履修登録セッションが正常に作成される ===
+        // === Then: 全ての履修登録セッションが集約として正常に作成され取得可能であること ===
         yield* thenMultipleSessionsAreCreatedSuccessfully([
           { sessionId: session1Id, studentId: student1Id, term: springTerm },
           { sessionId: session2Id, studentId: student2Id, term: springTerm },
@@ -165,7 +158,7 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
         .pipe(Effect.runPromise)
     );
 
-    it("作成されたセッションはDraft状態である", () =>
+    it("セッションが編集可能なDraft状態で作成される", () =>
       Effect.gen(function* () {
         // === Given: 有効な学生IDと学期が指定される ===
         const studentId = StudentId.make("S12345678");
@@ -174,10 +167,8 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
         // === When: 履修登録セッションを作成する ===
         const sessionId = yield* createRegistrationSession({ studentId, term });
 
-        // === Then: セッションがDraft状態で作成される ===
+        // === Then: セッションが集約としてDraft状態で作成されること ===
         const session = yield* thenRegistrationSessionCanBeRetrieved(sessionId, studentId, term);
-
-        // === And: 履修登録セッションが編集可能なDraft状態である ===
         thenSessionIsInDraftState(session);
       })
         .pipe(Effect.provide(TestLayer))
@@ -185,11 +176,12 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
     );
   });
 
-  describe("エラーケース (E2E)", () => {
-    it("不正な学生IDでコマンド実行は失敗する", () =>
+  describe("異常系シナリオ", () => {
+    it("不正な学生IDでの履修計画開始を拒否する", () =>
       Effect.gen(function* () {
         // === Given: 不正な形式の学生IDと有効な学期が指定される ===
-        const { invalidStudentId, validTerm } = yield* givenInvalidStudentIdAndValidTerm();
+        const invalidStudentId = StudentId.make("INVALID");
+        const validTerm = Term.make("2024-Spring");
 
         // === When: 不正な学生IDで履修登録セッション作成を試行する ===
         const commandError = yield* createRegistrationSession({
@@ -198,16 +190,17 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
         }).pipe(Effect.flip);
 
         // === Then: 学生IDの形式エラーが発生すること ===
-        thenInvalidSessionIdErrorOccurs(commandError as InvalidRegistrationSessionId, "INVALID", "2024-Spring");
+        thenInvalidSessionIdErrorOccurs(commandError as InvalidRegistrationSessionId, "INVALID", validTerm);
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
     );
 
-    it("不正な学期でコマンド実行は失敗する", () =>
+    it("不正な学期での履修計画開始を拒否する", () =>
       Effect.gen(function* () {
         // === Given: 有効な学生IDと不正な形式の学期が指定される ===
-        const { validStudentId, invalidTerm } = yield* givenValidStudentIdAndInvalidTerm();
+        const validStudentId = StudentId.make("S12345678");
+        const invalidTerm = Term.make("BAD-TERM");
 
         // === When: 不正な学期で履修登録セッション作成を試行する ===
         const commandError = yield* createRegistrationSession({
@@ -216,7 +209,7 @@ describe("受け入れテスト: 履修登録セッション開始", () => {
         }).pipe(Effect.flip);
 
         // === Then: 学期の形式エラーが発生すること ===
-        thenInvalidSessionIdErrorOccurs(commandError as InvalidRegistrationSessionId, "S12345678", "BAD-TERM");
+        thenInvalidSessionIdErrorOccurs(commandError as InvalidRegistrationSessionId, validStudentId, "BAD-TERM");
       })
         .pipe(Effect.provide(TestLayer))
         .pipe(Effect.runPromise)
