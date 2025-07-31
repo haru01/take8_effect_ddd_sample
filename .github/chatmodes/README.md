@@ -144,4 +144,3 @@
 - [開発パターン](../copilot-instructions/development-patterns.md)
 - [テストガイド](../copilot-instructions/testing-guide.md)
 - [ワークフロー](../copilot-instructions/workflow-guide.md)
-- [Claude Code エージェントシステム](../../.claude/agents/README.md)
