@@ -139,21 +139,9 @@
 
 各チャットモードの作業結果は `.github/tmp/` に保存され、次のモードに引き継がれます。
 
-### クイックスタート
-```bash
-# ストーリーワークスペース作成
-./.github/tmp/create-story-workspace.sh 3 submission
-
-# 振り返りワークスペース作成
-./.github/tmp/create-reflection-workspace.sh story story3-submission
-```
-
-詳細は [一時ファイル管理ガイド](../tmp/README.md) を参照してください。
 
 ## 🔗 関連ドキュメント
 
-- [一時ファイル管理](../tmp/README.md)
-- [チャットモード統合ガイド](../tmp/chatmode-integration.md)
 - [プロジェクトガイド](../copilot-instructions/README.md)
 - [開発パターン](../copilot-instructions/development-patterns.md)
 - [テストガイド](../copilot-instructions/testing-guide.md)
